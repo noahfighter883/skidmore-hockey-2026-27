@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <clipPath id="c"><rect width="64" height="64" rx="12"/></clipPath>
+  <g clip-path="url(#c)">
+    <rect width="64" height="64" fill="#235240"/>
+    <rect y="54" width="64" height="4" fill="#e6c45a"/>
+  </g>
+  <text x="32" y="45" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="44" fill="#e6c45a">S</text>
+</svg>
