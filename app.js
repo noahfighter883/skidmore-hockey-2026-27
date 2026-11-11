@@ -16,6 +16,8 @@
   const C = { g: '#235240', bad: '#d0742a', badText: '#a65a1e', n: '#b4bdb8', s2: '#8ea2ab', s3: '#e3c873', gold: '#ab8d3b' };
 
   let P = [], S = { games: 1, updated: '', log: [] }, LAST = {}, G = 1, minGP = 1, tracked = 60, PB = 0;
+  /* faceoffs come from two places: the data export (P) and a hand count at the rink (HP, from data/faceoffs-hand.json) */
+  let HP = [], HG = [], foSrc = 'export';
   const f0 = d3.format('d'), f1 = d3.format('.1f'), f2 = d3.format('.2f');
   const signed = (v, f) => (v > 0 ? '+' : v < 0 ? '−' : '') + (f || f1)(Math.abs(v));
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -79,13 +81,14 @@
   function bindRows(sel, rowsSel, o, tip) {
     let tapped = null;
     const dim = (d) => rowsSel && rowsSel.style('opacity', (e) => (d == null || e === d ? 1 : 0.45));
-    const foot = (touch) => (o.player === false ? null : touch ? 'Tap again to open the player card' : 'Click to open the player card');
+    const canOpen = (d) => o.player !== false && d && P.some((r) => r.short === d.short);
+    const foot = (touch, d) => (!canOpen(d) ? null : touch ? 'Tap again to open the player card' : 'Click to open the player card');
     if (o.player !== false) (rowsSel || sel).classed('go', true);
-    sel.on('pointermove', (ev, d) => { if (ev.pointerType === 'touch') return; dim(d); tip.show(ev, o.tip(d), foot(false)); })
+    sel.on('pointermove', (ev, d) => { if (ev.pointerType === 'touch') return; dim(d); tip.show(ev, o.tip(d), foot(false, d)); })
       .on('pointerleave', (ev) => { if (ev.pointerType === 'touch') return; dim(null); tip.hide(); })
       .on('click', (ev, d) => {
-        if (lastPointer === 'touch' && tapped !== d) { tapped = d; dim(d); tip.show(ev, o.tip(d), foot(true)); return; }
-        if (o.player !== false) openPlayer(d.short);
+        if (lastPointer === 'touch' && tapped !== d) { tapped = d; dim(d); tip.show(ev, o.tip(d), foot(true, d)); return; }
+        if (canOpen(d)) openPlayer(d.short);
       });
   }
   function axisStyle(g) {
@@ -358,6 +361,16 @@
   /* ---------- overview ---------- */
   const sum = (f) => d3.sum(P, (r) => r[f]);
   const pctOf = (a, c) => (c ? Math.round((a / c) * 100) : 0);
+  const gamesTxt = (gs) => (gs.length === 1 ? 'game ' + gs[0] : 'games ' + list(gs.map(String)));
+  /* the hand count stands in for the export only when it covers every game played */
+  const handFull = () => HP.length > 0 && HG.length === G && HG.every((g, i) => g === i + 1);
+  const FO = {
+    hand: { rows: () => HP, name: 'hand count', long: () => `Hand count at the rink, ${gamesTxt(HG)}` },
+    export: { rows: () => P.filter((r) => r.fo > 0), name: 'data export', long: () => `Data export, ${G === 1 ? 'game 1' : 'games 1 to ' + G}` },
+  };
+  const foSum = (src, f) => d3.sum(FO[src].rows(), (r) => r[f]);
+  const foLine = (src, f, w) => { const n = foSum(src, f), k = foSum(src, w); return `${k} of ${n} (${pctOf(k, n)}%)`; };
+  const handOf = (short) => HP.find((h) => h.short === short);
 
   function insights() {
     const out = [];
@@ -408,28 +421,33 @@
       out.push({ id: 'usage', eyebrow: 'Usage', go: 'team/roles', link: 'ice-time charts', title: `${tf[0].short} and ${td[0].short} lead in ice time`, body });
     }
 
-    const takers = P.filter((r) => r.fo > 0).sort(byDesc('fo'));
+    const src = handFull() ? 'hand' : 'export';
+    const takers = FO[src].rows().slice().sort(byDesc('fo'));
     if (takers.length) {
-      const fo = sum('fo'), fow = sum('fow');
-      const z = (k) => { const n = sum('fo_' + k), w = sum('fow_' + k); return n ? `${w} of ${n} (${pctOf(w, n)}%)` : 'no draws'; };
+      const fo = foSum(src, 'fo'), fow = foSum(src, 'fow');
+      const z = (k) => { const n = foSum(src, 'fo_' + k), w = foSum(src, 'fow_' + k); return n ? `${w} of ${n} (${pctOf(w, n)}%)` : 'no draws'; };
+      const other = src === 'hand' && sum('fo') ? ` The data export has only ${b(sum('fow'))} of ${b(sum('fo'))}, so its faceoff numbers miss part of the game.` : '';
       const gone = Object.values(LAST).filter((l) => l.left), allFo = d3.sum(Object.values(LAST), (l) => l.fo);
       const share = allFo ? pctOf(d3.sum(gone, (l) => l.fo), allFo) : 0;
       out.push({
         id: 'faceoffs', eyebrow: 'Faceoffs', go: 'team/roles', link: 'faceoff charts',
         title: takers.length > 1 ? `${takers[0].short} and ${takers[1].short} took the most draws` : `${takers[0].short} took the draws`,
-        body: `The team won ${b(fow)} of ${b(fo)} draws (${pctOf(fow, fo)}%). ${list(takers.slice(0, 4).map((r) => `${first(r)} ${r.fow} of ${r.fo}`))}. By zone: defensive ${z('dz')}, neutral ${z('nz')}, offensive ${z('oz')}.`
+        body: `By the ${FO[src].name}, the team won ${b(fow)} of ${b(fo)} draws (${pctOf(fow, fo)}%). ${list(takers.slice(0, 4).map((r) => `${first(r)} ${r.fow} of ${r.fo}`))}. By zone: defensive ${z('dz')}, neutral ${z('nz')}, offensive ${z('oz')}.${other}`
           + (share ? ` Players who have graduated took ${share}% of last season's draws, so who takes them is still an open question.` : ''),
       });
     }
 
     const pen = P.filter((r) => r.pim > 0).sort(byDesc('pim')), drew = P.filter((r) => r.drawn > 0).sort(byDesc('drawn'));
-    const missing = Object.entries(LAST).filter(([k, l]) => !l.left && !P.some((r) => r.short === k)).map(([k]) => esc(k));
+    const absent = Object.entries(LAST).filter(([k, l]) => !l.left && !P.some((r) => r.short === k)).map(([k]) => k);
+    const unlogged = absent.filter((k) => handOf(k)).map(esc);
+    const missing = absent.filter((k) => !handOf(k)).map(esc);
     const fresh = P.filter((r) => !LAST[r.short]).map(first);
     const parts = [];
     parts.push(pen.length ? `${list(pen.map((r) => `${first(r)} (${r.pim})`))} took ${b(sum('pim'))} penalty minutes, and the team drew ${b(sum('drawn'))}${drew.length ? ': ' + list(drew.map((r) => first(r) + (r.drawn > 1 ? ' (' + r.drawn + ')' : ''))) : ''}.` : `No penalty minutes yet. The team drew ${b(sum('drawn'))}.`);
     if (missing.length) parts.push(`${list(missing)} from last year's roster ${missing.length === 1 ? 'has' : 'have'} not played yet. The file does not say why.`);
+    if (unlogged.length) parts.push(`${list(unlogged)} ${unlogged.length === 1 ? 'is' : 'are'} not in the data export, but the hand count has ${unlogged.length === 1 ? 'him' : 'them'} taking faceoffs, so ${unlogged.length === 1 ? 'he' : 'they'} probably played and ${unlogged.length === 1 ? 'was' : 'were'} not logged.`);
     if (fresh.length) parts.push(`New to the data this season: ${list(fresh)}.`);
-    out.push({ id: 'roster', eyebrow: 'Penalties and roster', go: 'team/roles', link: 'penalty charts', title: missing.length ? `${list(missing)} ${missing.length === 1 ? 'has' : 'have'} not played yet` : 'Penalties and roster', body: parts.join(' ') });
+    out.push({ id: 'roster', eyebrow: 'Penalties and roster', go: 'team/roles', link: 'penalty charts', title: unlogged.length ? `${list(unlogged)} ${unlogged.length === 1 ? 'is' : 'are'} missing from the export` : missing.length ? `${list(missing)} ${missing.length === 1 ? 'has' : 'have'} not played yet` : 'Penalties and roster', body: parts.join(' ') });
     return out;
   }
 
@@ -449,24 +467,28 @@
     const k = $('#th-kpis');
     k.innerHTML = kpi('Goals', goals, f1(sum('xg')) + ' expected')
       + kpi('Shots on goal', sog, `of ${shots} attempts (${pctOf(sog, shots)}%)`)
-      + kpi('Faceoffs won', fo ? pctOf(fow, fo) + '%' : '–', `${fow} of ${fo} draws`)
+      + (handFull()
+        ? kpi('Faceoffs won', pctOf(foSum('hand', 'fow'), foSum('hand', 'fo')) + '%', `${foSum('hand', 'fow')} of ${foSum('hand', 'fo')} by hand count. Export: ${fow} of ${fo}`)
+        : kpi('Faceoffs won', fo ? pctOf(fow, fo) + '%' : '–', `${fow} of ${fo} draws`))
       + kpi('Penalty minutes', sum('pim'), `${sum('drawn')} penalties drawn`);
     k.removeAttribute('aria-busy');
 
     /* one caution strip instead of two banners: a one-line summary, details on demand */
-    const early = G < 8, ice = !iceOK();
+    const early = G < 8, ice = !iceOK(), foGap = handFull() && foSum('hand', 'fo') !== sum('fo');
     const lastIce = (() => { const v = Object.values(LAST); const gm = d3.max(v, (l) => l.gp); return gm ? d3.sum(v, (l) => l.toi * l.gp) / (5 * gm) : 0; })();
     const cz = $('#th-caution');
-    cz.hidden = !early && !ice;
+    cz.hidden = !early && !ice && !foGap;
     const bits = [];
     if (early) bits.push(G < 3 ? `${count(G, 'game')} of data` : `Only ${G} games in`);
     if (ice) bits.push('ice time looks under-logged');
-    $('#th-caution-sum').innerHTML = `<span class="th-dot${ice ? ' warn' : ''}" aria-hidden="true"></span><span><b>Read with care:</b> ${esc(bits.join(', and '))}.</span>`;
+    if (foGap) bits.push("the export's faceoffs don't match the hand count");
+    $('#th-caution-sum').innerHTML = `<span class="th-dot${ice ? ' warn' : ''}" aria-hidden="true"></span><span><b>Read with care:</b> ${esc((bits.length > 1 ? bits.slice(0, -1).join(', ') + ' and ' + bits[bits.length - 1] : bits[0] || ''))}.</span>`;
     const body = [];
     if (early) body.push(G < 3
       ? `<p><b>Very early.</b> This is ${count(G, 'game')} of data, so every number describes one night, not a pattern. Read the charts as a snapshot and start looking for trends after about five games.</p>`
       : `<p><b>Still early.</b> After ${G} games, one big night can still swing a total. Rates and plus-minus are the shakiest numbers.</p>`);
     if (ice) body.push(`<p><b>Check the ice time.</b> The skaters' ice time adds up to about ${Math.round(tracked)} minutes per 60-minute game${lastIce ? ` (last season's exports added up to about ${Math.round(lastIce)})` : ''}. Shots and goals look like a full game, so some ice time was probably not logged. Until that is sorted out, treat ice time and per-60 numbers as low-confidence and lean on shot share, pass accuracy and faceoffs.</p>`);
+    if (foGap) body.push(`<p><b>Two faceoff counts.</b> The hand count at the rink has ${foSum('hand', 'fow')} of ${foSum('hand', 'fo')} draws won. The data export has ${sum('fow')} of ${sum('fo')}, and some players' numbers differ a lot. The page uses the hand count for faceoffs by default and labels every faceoff number with its source. The Team tab has both, side by side.</p>`);
     $('#th-caution-body').innerHTML = body.join('');
 
     const all = insights();
@@ -554,25 +576,7 @@
       const topt = { label: (r) => r.short, value: (r) => r.toi, color: () => C.g, rowH: 22, vlabel: (r) => r.toi_txt, tip: (r) => [r.name, `${r.toi_txt} a game`, `${count(r.gp, 'game')}`] };
       hbar($('#ch-toi-f'), toi('F'), topt);
       hbar($('#ch-toi-d'), toi('D'), topt);
-      const tk = P.filter((r) => r.fo > 0).sort(byDesc('fo')).map((r) => ({ ...r, fol: r.fo - r.fow }));
-      if (!tk.length) { ['#ch-fo', '#ch-fz-dz', '#ch-fz-nz', '#ch-fz-oz'].forEach((s) => message($(s), 'No faceoffs recorded yet.')); $('#th-fz-sum').textContent = ''; }
-      else {
-        sbar($('#ch-fo'), tk, {
-          label: (r) => r.short, total: (r) => r.fo, vlabel: (r) => `${r.fopct}% of ${r.fo}`,
-          series: [{ name: 'Won', f: 'fow', color: C.g }, { name: 'Lost', f: 'fol', color: C.s2 }],
-          tip: (r) => [r.name, `${r.fow} won of ${r.fo} draws`, `${r.fopct}% win rate`],
-        });
-        [['dz', 'defensive'], ['nz', 'neutral'], ['oz', 'offensive']].forEach(([z, name]) => {
-          const n = (r) => r['fo_' + z], w = (r) => r['fow_' + z], pc = (r) => (n(r) ? (w(r) / n(r)) * 100 : 50);
-          hbar($('#ch-fz-' + z), tk, {
-            label: (r) => r.short, value: pc, base: 50, domain: [0, 100], color: (r) => (n(r) < 3 ? C.n : tone(pc(r), 50, 5)), rowH: 24,
-            vlabel: (r) => (n(r) ? `${w(r)} of ${n(r)}` : '–'), tick: (d) => d + '%',
-            tip: (r) => [r.name, n(r) ? `${w(r)} won of ${n(r)} ${name}-zone draws` : `No ${name}-zone draws`, n(r) ? Math.round(pc(r)) + '% win rate' : ''].filter(Boolean),
-          });
-        });
-        const z = (k) => { const n = sum('fo_' + k), w = sum('fow_' + k); return n ? `${w} of ${n} (${pctOf(w, n)}%)` : 'none taken'; };
-        $('#th-fz-sum').innerHTML = `Team totals: defensive zone ${z('dz')}, neutral zone ${z('nz')}, offensive zone ${z('oz')}.`;
-      }
+      drawFaceoffs();
       const pen = P.filter((r) => r.pim > 0 || r.drawn > 0).sort((a, c) => c.pim - a.pim || c.drawn - a.drawn || a.name.localeCompare(c.name));
       if (!pen.length) { message($('#ch-pim'), 'No penalties yet.'); $('#ch-drawn').replaceChildren(); }
       else {
@@ -589,6 +593,55 @@
       });
     },
   };
+
+  function drawFaceoffs() {
+    $('#th-fo-srcbar').hidden = !HP.length;
+    $$('#th-fo-src button').forEach((x) => x.setAttribute('aria-pressed', String(x.dataset.src === foSrc)));
+    $$('[data-fo-line]').forEach((el) => { el.textContent = 'Source: ' + FO[foSrc].long(); el.classList.toggle('hand', foSrc === 'hand'); });
+    const tk = FO[foSrc].rows().slice().sort(byDesc('fo')).map((r) => ({ ...r, fol: r.fo - r.fow, fopct: pctOf(r.fow, r.fo) }));
+    if (!tk.length) { ['#ch-fo', '#ch-fz-dz', '#ch-fz-nz', '#ch-fz-oz'].forEach((sel) => message($(sel), 'No faceoffs recorded yet.')); $('#th-fz-sum').textContent = ''; }
+    else {
+      sbar($('#ch-fo'), tk, {
+        label: (r) => r.short, total: (r) => r.fo, vlabel: (r) => `${r.fopct}% of ${r.fo}`,
+        series: [{ name: 'Won', f: 'fow', color: C.g }, { name: 'Lost', f: 'fol', color: C.s2 }],
+        tip: (r) => [r.name, `${r.fow} won of ${r.fo} draws`, `${r.fopct}% win rate, ${FO[foSrc].name}`],
+      });
+      [['dz', 'defensive'], ['nz', 'neutral'], ['oz', 'offensive']].forEach(([z, name]) => {
+        const n = (r) => r['fo_' + z], w = (r) => r['fow_' + z], pc = (r) => (n(r) ? (w(r) / n(r)) * 100 : 50);
+        hbar($('#ch-fz-' + z), tk, {
+          label: (r) => r.short, value: pc, base: 50, domain: [0, 100], color: (r) => (n(r) < 3 ? C.n : tone(pc(r), 50, 5)), rowH: 24,
+          vlabel: (r) => (n(r) ? `${w(r)} of ${n(r)}` : '–'), tick: (d) => d + '%',
+          tip: (r) => [r.name, n(r) ? `${w(r)} won of ${n(r)} ${name}-zone draws` : `No ${name}-zone draws`, n(r) ? Math.round(pc(r)) + '% win rate' : ''].filter(Boolean),
+        });
+      });
+      const z = (k) => { const n = foSum(foSrc, 'fo_' + k), w = foSum(foSrc, 'fow_' + k); return n ? `${w} of ${n} (${pctOf(w, n)}%)` : 'none taken'; };
+      $('#th-fz-sum').innerHTML = `Team totals by the ${FO[foSrc].name}: defensive zone ${z('dz')}, neutral zone ${z('nz')}, offensive zone ${z('oz')}.`;
+    }
+    /* side-by-side table, only when there is a hand count */
+    const cmp = $('#th-fo-cmp');
+    cmp.hidden = !HP.length;
+    if (!HP.length) return;
+    const same = handFull();
+    $('#th-fo-cmpnote').textContent = same
+      ? `Won of taken, by player and zone. "Gap" is hand-count draws minus export draws: a positive gap means the export missed draws. Hand count is ${gamesTxt(HG)}; the export is the same game${G === 1 ? '' : 's'}.`
+      : `The hand count covers ${gamesTxt(HG)} and the export covers games 1 to ${G}, so these columns are not the same games. Add a hand count for every game to compare them directly.`;
+    const names = [...new Set([...HP.map((h) => h.short), ...P.filter((r) => r.fo > 0).map((r) => r.short)])];
+    const rows = names.map((k) => ({ k, h: handOf(k), e: P.find((r) => r.short === k && r.fo > 0) }))
+      .sort((a, c) => (c.h ? c.h.fo : 0) - (a.h ? a.h.fo : 0) || (c.e ? c.e.fo : 0) - (a.e ? a.e.fo : 0));
+    const wt = (r, k) => (!r ? '–' : r['fo' + k] ? `${r['fow' + k]} of ${r['fo' + k]}` : '–');
+    const zones = [['', 'All draws'], ['_dz', 'Defensive'], ['_nz', 'Neutral'], ['_oz', 'Offensive']];
+    const t = $('#th-fo-table');
+    const hz = ([, l]) => `<th scope="col" class="r"><span>${l}, hand</span></th><th scope="col" class="r"><span>${l}, export</span></th>`;
+    t.tHead.innerHTML = '<tr><th scope="col"><span>Player</span></th>' + hz(zones[0]) + '<th scope="col" class="r"><span>Gap</span></th>' + zones.slice(1).map(hz).join('') + '</tr>';
+    const tr = (cells, cls) => { const r = document.createElement('tr'); if (cls) r.className = cls; cells.forEach((c, i) => { const td = document.createElement('td'); td.textContent = c; if (i) td.className = 'n'; r.appendChild(td); }); return r; };
+    const tot = (src) => { const o = {}; ['', '_dz', '_nz', '_oz'].forEach((k) => { o['fo' + k] = foSum(src, 'fo' + k); o['fow' + k] = foSum(src, 'fow' + k); }); return o; };
+    const th = tot('hand'), te = tot('export');
+    t.tBodies[0].replaceChildren(
+      ...rows.map(({ k, h, e }) => tr([k, wt(h, ''), wt(e, ''), signed((h ? h.fo : 0) - (e ? e.fo : 0), f0), ...zones.slice(1).flatMap(([z]) => [wt(h, z), wt(e, z)])])),
+      tr(['Team', wt(th, ''), wt(te, ''), signed(th.fo - te.fo, f0), ...zones.slice(1).flatMap(([z]) => [wt(th, z), wt(te, z)])], 'th-tot'),
+    );
+  }
+  $$('#th-fo-src button').forEach((x) => x.addEventListener('click', () => { foSrc = x.dataset.src; drawFaceoffs(); }));
 
   /* ---------- season ---------- */
   const METRICS = [
@@ -646,13 +699,15 @@
     if (ctx.topShare.has(r.short)) tags.push('Top shot share');
     if (r.gxg >= 0.75 * Math.sqrt(G)) tags.push('Finishing high');
     else if (r.xg >= 0.4 * Math.sqrt(G) && r.gxg <= -0.4 * Math.sqrt(G)) tags.push('Finishing low');
-    if (r.fo >= 5) tags.push('Takes faceoffs');
+    const hf = handOf(r.short);
+    if (Math.max(r.fo, hf ? hf.fo : 0) >= 5) tags.push('Takes faceoffs');
     if (!lp) tags.push('New to the data');
     const s = [];
     const shotLine = r.shots ? `${count(r.shots, 'shot')} (${r.sog} on goal) for ${count(r.g, 'goal')} on ${f1(r.xg)} expected.` : `no shots, and ${f1(r.xg)} expected goals.`;
     s.push(iceOK() ? `${b(r.toi_txt)} ${G > 1 ? 'a game' : 'of ice time'}, ${shotLine}` : shotLine.replace(/^./, (c) => c.toUpperCase()));
     if (r.corsi != null) s.push(`The team took ${b(Math.round(r.corsi) + '%')} of shot attempts with him on the ice and made ${signed(r.netxg_pg, f2)} expected goals a game.`);
-    if (r.fo) s.push(`Took ${count(r.fo, 'faceoff')} and won ${b(r.fopct + '%')}.`);
+    if (hf && handFull()) s.push(`By hand count, took ${count(hf.fo, 'faceoff')} and won ${b(pctOf(hf.fow, hf.fo) + '%')}` + (r.fo ? ` (the data export has ${r.fow} of ${r.fo}).` : ' (the data export has none).'));
+    else if (r.fo) s.push(`Took ${count(r.fo, 'faceoff')} and won ${b(r.fopct + '%')} in the data export.`);
     if (r.pim || r.drawn) s.push([r.pim ? `Took ${r.pim} penalty ${r.pim === 1 ? 'minute' : 'minutes'}` : '', r.drawn ? `drew ${count(r.drawn, 'penalty').replace('penaltys', 'penalties')}` : ''].filter(Boolean).join(' and ').replace(/^./, (c) => c.toUpperCase()) + '.');
     if (lp) s.push(`Last season: ${f2(lp.ppg)} points a game${iceOK() ? `, ${lp.toi_txt} a night` : ''}, ${f1(lp.corsi)}% shot share.`);
     const a = document.createElement('article');
@@ -685,7 +740,8 @@
     ['corsi', 'Shot share', "Team's share of shot attempts with the player on the ice"], ['accpass', 'Pass %', 'Passes that reached a teammate'],
     ['entries', 'Entries/GP', 'Zone entries per game'], ['breakouts', 'Breakouts/GP', 'Breakouts per game'], ['slot', 'Slot/GP', 'Passes to the slot per game'],
     ['hits', 'Hits', 'Hits'], ['blk', 'Blocks', 'Shots blocked'],
-    ['fo', 'FO', 'Faceoffs taken'], ['fopct', 'FO%', 'Faceoff win rate'], ['fz_dz', 'DZ FO%', 'Defensive-zone faceoff win rate'], ['fz_nz', 'NZ FO%', 'Neutral-zone faceoff win rate'], ['fz_oz', 'OZ FO%', 'Offensive-zone faceoff win rate'],
+    ['hfo', 'FO hand', 'Faceoffs taken, hand count at the rink'], ['hfopct', 'FO% hand', 'Faceoff win rate, hand count at the rink'],
+    ['fo', 'FO export', 'Faceoffs taken, data export'], ['fopct', 'FO% export', 'Faceoff win rate, data export'], ['fz_dz', 'DZ FO% export', 'Defensive-zone faceoff win rate, data export'], ['fz_nz', 'NZ FO% export', 'Neutral-zone faceoff win rate, data export'], ['fz_oz', 'OZ FO% export', 'Offensive-zone faceoff win rate, data export'],
     ['pim', 'PIM', 'Penalty minutes'], ['drawn', 'Drawn', 'Penalties drawn'],
   ];
   const TEXT = ['name', 'pos'];
@@ -801,7 +857,7 @@
     if (current === 'data') renderTable();
   }
 
-  const FILES = ['players', 'season', 'last-season'];
+  const FILES = ['players', 'season', 'last-season', 'faceoffs-hand'];
   Promise.all(FILES.map((n) => fetch(`data/${n}.json`).then((r) => (r.ok ? r.json() : Promise.reject(new Error(r.status)))).then((d) => [n, d], () => [n, null])))
     .then((res) => {
       const got = Object.fromEntries(res);
@@ -817,10 +873,30 @@
       });
       G = S.games; minGP = Math.max(1, Math.ceil(G / 2));
       tracked = d3.sum(P, (r) => r.toi * r.gp) / (5 * G);
+      buildHand(got['faceoffs-hand']);
       PB = Math.round(d3.median(P.filter((r) => r.gp >= minGP && r.corsi != null), (r) => r.accpass));
       $('#th-status').textContent = `Through game ${G} · updated ${fmtDate(S.updated)}`;
       route();
     });
+  function buildHand(raw) {
+    HP = []; HG = [];
+    if (!raw || !raw.games) return;
+    const acc = {};
+    Object.entries(raw.games).forEach(([g, players]) => {
+      HG.push(+g);
+      Object.entries(players).forEach(([k, zs]) => {
+        const a = acc[k] || (acc[k] = { short: k, fo: 0, fow: 0, fo_dz: 0, fow_dz: 0, fo_nz: 0, fow_nz: 0, fo_oz: 0, fow_oz: 0 });
+        ['dz', 'nz', 'oz'].forEach((z) => { const [w, l] = zs[z] || [0, 0]; a['fow_' + z] += w; a['fo_' + z] += w + l; a.fow += w; a.fo += w + l; });
+      });
+    });
+    HG.sort((a, c) => a - c);
+    HP = Object.values(acc).filter((a) => a.fo > 0).map((a) => {
+      const p = P.find((r) => r.short === a.short);
+      return { ...a, name: p ? p.name : a.short + ' (not in the export)', pos: p ? p.pos : '' };
+    });
+    if (HP.length) foSrc = 'hand';
+    P.forEach((r) => { const h = handOf(r.short); r.hfo = h ? h.fo : null; r.hfopct = h ? pctOf(h.fow, h.fo) : null; });
+  }
   let resizeTimer, lastW = window.innerWidth;
   window.addEventListener('resize', () => { if (window.innerWidth === lastW) return; lastW = window.innerWidth; clearTimeout(resizeTimer); resizeTimer = setTimeout(draw, 150); });
 

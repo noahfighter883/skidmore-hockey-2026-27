@@ -128,10 +128,19 @@
       <div class="th-card"><h4 class="th-ch">Ice time per game, forwards</h4><p class="th-note">Average time on ice.</p><div class="th-chart" id="ch-toi-f"></div></div>
       <div class="th-card"><h4 class="th-ch">Ice time per game, defense</h4><p class="th-note">Average time on ice.</p><div class="th-chart" id="ch-toi-d"></div></div>
     </div>
+    <div class="th-srcbar" id="th-fo-srcbar" hidden>
+      <span class="th-srclab" id="th-fo-srclab">Faceoff numbers from</span>
+      <div class="th-filter" role="group" aria-labelledby="th-fo-srclab" id="th-fo-src">
+        <button type="button" class="th-fbtn" data-src="hand" aria-pressed="true">Hand count at the rink</button>
+        <button type="button" class="th-fbtn" data-src="export" aria-pressed="false">Data export</button>
+      </div>
+    </div>
     <div class="th-card"><h4 class="th-ch">Faceoffs taken and won</h4>
+      <p class="th-srcline" data-fo-line></p>
       <p class="th-note">Each bar is every draw a player took, split into won and lost. The label is the win rate.</p>
       <div class="th-chart" id="ch-fo"></div></div>
     <div class="th-card"><h4 class="th-ch">Faceoff win rate by zone</h4>
+      <p class="th-srcline" data-fo-line></p>
       <p class="th-note">Bars start at 50%. Labels show draws won of draws taken. Fewer than three draws in a zone stays grey, because a long bar on two draws means little.</p>
       <div class="th-grid3">
         <div><h5>Defensive zone</h5><div class="th-chart" id="ch-fz-dz"></div></div>
@@ -139,6 +148,10 @@
         <div><h5>Offensive zone</h5><div class="th-chart" id="ch-fz-oz"></div></div>
       </div>
       <p class="th-after" id="th-fz-sum"></p>
+    </div>
+    <div class="th-card" id="th-fo-cmp" hidden><h4 class="th-ch">Hand count against the export</h4>
+      <p class="th-note" id="th-fo-cmpnote"></p>
+      <div class="th-tablewrap" tabindex="0" role="region" aria-label="Faceoffs, hand count against the export"><table class="th-table" id="th-fo-table"><thead></thead><tbody></tbody></table></div>
     </div>
     <div class="th-card"><h4 class="th-ch">Penalties</h4>
       <p class="th-note">Penalty minutes taken and penalties drawn, each on its own scale, for players with either.</p>
@@ -200,6 +213,8 @@
     <p>Shot share is the team's shot attempts divided by all shot attempts while the player was on the ice, calculated from the attempt counts. Last season's figures in the comparison come from the same spreadsheet column that last year's dashboard used, so a small difference in method is possible. Rate charts leave out players with fewer than half the team's games.</p>
     <p>Green and orange compare against an even line: zero for margins, 50% for shot share and faceoffs. Gaps smaller than a noise threshold are drawn grey. The threshold shrinks as games are added, so early-season charts are mostly grey on purpose. Pass accuracy is compared with the team median and is not colored, because being below the median is not the same as being bad.</p>
     <p>Expected goals (xG) and the on-ice margin come from the data provider's model, not from this analysis. Power-play and penalty-kill time are empty in the game 1 export even though penalties were drawn, so those two charts stay hidden until the columns fill in.</p>
+    <h4>Two sets of faceoff numbers</h4>
+    <p id="th-fo-notes">Faceoffs can come from two places. The data export is the same spreadsheet as everything else. The hand count is tallied at the rink and typed into data/faceoffs-hand.json. Wherever the page shows a faceoff number, it says which one it is.</p>
     <h4>How to read the luck language</h4>
     <p>When a player scores fewer goals than expected, the usual explanation is variance and the expected-goals value tends to be a better guide to the next game than the actual total. That is a tendency, not a rule, and the first few games are a very small sample. The same goes for plus-minus compared with the on-ice chance margin.</p>
   </div>

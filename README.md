@@ -23,6 +23,18 @@ git push
 
 If two exports cover the same game, the one with the later date wins. If a player appears on two rows of an export, the script stops and tells you which one to merge.
 
+## Hand-tracked faceoffs
+
+The export's faceoffs for game 1 did not match a hand count taken at the rink: the export has 24 of 44 draws, and the hand count has 38 of 68. The page shows both and labels every faceoff number with its source. When the hand count covers every game played, the hand count is the default; otherwise the page falls back to the export.
+
+To add a game, type its counts into `data/faceoffs-hand.json` under the game number. Each zone is `[won, lost]`, and names are the short names the site uses. `prep.py` never touches this file.
+
+```
+"2": {
+  "Fogu": { "dz": [5, 2], "nz": [2, 1], "oz": [4, 3] }
+}
+```
+
 ## Run it locally
 
 It is a static site with no build step.
@@ -58,5 +70,6 @@ exports/              one spreadsheet per game, season to date
 data/players.json     built by prep.py
 data/season.json      built by prep.py, with the game log
 data/last-season.json last season's numbers, fixed
+data/faceoffs-hand.json faceoffs counted by hand, typed in after each game
 prep/prep.py          exports to JSON
 ```

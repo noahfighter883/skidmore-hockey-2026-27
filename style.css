@@ -114,6 +114,12 @@ body { margin: 0; background: #f4f6f3; }
 .th-key.g { background: var(--d-good); }
 .th-key.bad { background: var(--d-bad); }
 .th-key.n { background: var(--d-noise); }
+.th-srcbar { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem 1rem; }
+.th-srcbar[hidden] { display: none; }
+.th-srclab { font-size: .9rem; font-weight: 600; color: var(--ink); }
+.th-srcline { font-size: .85rem; font-weight: 600; color: var(--ink2); }
+.th-srcline.hand { color: var(--g); }
+.th-table tr.th-tot td { font-weight: 700; border-top: 2px solid var(--line); }
 .th-flag { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: .7rem 1rem; max-width: none; }
 
 .th-tip { position: absolute; z-index: 5; pointer-events: none; background: var(--panel); border: 1px solid #cfd8d2; border-radius: 8px; box-shadow: 0 4px 14px rgba(28, 43, 36, .16); padding: .4rem .65rem; font-size: .85rem; line-height: 1.45; white-space: nowrap; font-variant-numeric: tabular-nums; color: var(--ink); }
