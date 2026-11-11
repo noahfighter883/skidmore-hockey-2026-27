@@ -35,22 +35,25 @@ Then open http://localhost:8000. Opening `index.html` directly will not work, be
 
 ## Deploy
 
-Import the repo in Vercel and leave the framework preset on "Other". No build command and no output directory are needed. The page has `noindex`, but a Vercel link is still reachable by anyone who has it, and the repo should stay private because it holds the raw exports.
+Import the repo in Vercel and leave the framework preset on "Other". No build command and no output directory are needed. The page has `noindex`, but a Vercel link is still reachable by anyone who has it.
 
 ## What is on the site
 
-- **Overview:** totals, a sample-size note, the ice-time check and six generated write-ups.
-- **Scoring, Impact, Roles:** points, finishing against expected goals, shot share, pass accuracy, entries and breakouts, ice time, faceoffs overall and by zone, penalties, and power-play and penalty-kill time once the export fills them in. A few views stay hidden until the team has played five games.
-- **Vs last season:** each returning player's points per game, shot share, pass accuracy and on-ice expected-goal margin against last year.
-- **Games:** goals, expected goals and shots for each game.
-- **Players, All stats, Data notes:** cards, a sortable table and the method notes.
+- **Overview:** totals, the four headline numbers, one "read with care" strip for the sample-size note and the ice-time check, and six generated write-ups with the top two up front.
+- **Players:** a card for every skater. Clicking a player's row in any chart opens their card, and `#players/<name>` links straight to one.
+- **Team:** three sections. Scoring covers points, finishing against expected goals and shots. Possession and passing covers shot share, pass accuracy, entries and breakouts. Ice time, faceoffs, penalties covers the rest, plus power-play and penalty-kill time once the export fills them in. A few views stay hidden until the team has played five games.
+- **Season:** each returning player against last year, the per-game charts (from game 3) and the game log.
+- **Data:** a sortable table of every stat, with a key to the columns, and the method notes.
+
+Green means better than even and orange means worse. Grey means the gap is inside a noise band that shrinks as games are added. Each tab and section has its own URL, so the browser Back button works.
 
 ## Files
 
 ```
 index.html            page layout
 style.css             green and gold theme
-app.js                charts, tabs and all generated text (d3 v7, loaded from a CDN)
+app.js                charts, tabs and all generated text
+vendor/d3.min.js      d3 v7.9.0, served from the repo so the page never depends on a CDN
 exports/              one spreadsheet per game, season to date
 data/players.json     built by prep.py
 data/season.json      built by prep.py, with the game log

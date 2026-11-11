@@ -11,135 +11,45 @@
 <body>
 <div id="app">
 <div class="th">
-<div class="th-band"><div class="th-band-in">
-  <div class="th-brand"><span class="th-mono" aria-hidden="true">S</span><div><div class="th-brand-1">Skidmore</div><div class="th-brand-2">Hockey analytics</div></div></div>
-  <div class="th-band-r"><div class="th-band-1">2026-27 season</div><div class="th-band-2" id="th-status">Loading</div></div>
-</div></div>
-<div class="th-wrap">
-<header class="th-head">
-  <div class="th-intro" id="th-intro">
-  <p class="th-kicker">Season to date</p>
-  <h1>How the team is playing.</h1>
-  <p class="th-lede" id="th-lede"></p>
-  </div>
-</header>
+<header class="th-band"><div class="th-band-in">
+  <div class="th-brand"><span class="th-mono" aria-hidden="true">S</span><h1><span class="th-brand-1">Skidmore</span> <span class="th-brand-2">Hockey analytics</span></h1></div>
+  <div class="th-band-r"><div class="th-band-1">2026-27 season</div><div class="th-band-2" id="th-status" aria-live="polite">Loading the latest stats…</div></div>
+</div></header>
 
-<nav class="th-tabs" role="tablist" aria-label="Sections">
+<nav class="th-tabs" aria-label="Sections"><div class="th-tabs-in" role="tablist">
   <button type="button" role="tab" id="tab-overview" data-tab="overview" aria-selected="true">Overview</button>
-  <button type="button" role="tab" id="tab-scoring" data-tab="scoring" aria-selected="false">Scoring</button>
-  <button type="button" role="tab" id="tab-impact" data-tab="impact" aria-selected="false">Impact</button>
-  <button type="button" role="tab" id="tab-roles" data-tab="roles" aria-selected="false">Roles</button>
-  <button type="button" role="tab" id="tab-last" data-tab="last" aria-selected="false">Vs last season</button>
-  <button type="button" role="tab" id="tab-games" data-tab="games" aria-selected="false">Games</button>
-  <button type="button" role="tab" id="tab-players" data-tab="players" aria-selected="false">Players</button>
-  <button type="button" role="tab" id="tab-stats" data-tab="stats" aria-selected="false">All stats</button>
-  <button type="button" role="tab" id="tab-notes" data-tab="notes" aria-selected="false">Data notes</button>
-</nav>
+  <button type="button" role="tab" id="tab-players" data-tab="players" aria-selected="false" tabindex="-1">Players</button>
+  <button type="button" role="tab" id="tab-team" data-tab="team" aria-selected="false" tabindex="-1">Team</button>
+  <button type="button" role="tab" id="tab-season" data-tab="season" aria-selected="false" tabindex="-1">Season</button>
+  <button type="button" role="tab" id="tab-data" data-tab="data" aria-selected="false" tabindex="-1">Data</button>
+</div></nav>
+
+<main class="th-wrap">
+<div class="th-error" id="th-error" role="alert" hidden>
+  <h2>The stats didn't load</h2>
+  <p id="th-error-msg"></p>
+  <button type="button" class="th-btn" id="th-retry">Try again</button>
+</div>
 
 <section class="th-pane" id="pane-overview" data-pane="overview">
-  <div class="th-banner" id="th-early" hidden></div>
-  <div class="th-banner warn" id="th-check" hidden></div>
-  <div class="th-kpis" id="th-kpis"></div>
+  <div class="th-intro">
+    <p class="th-kicker">Season to date</p>
+    <h2 class="th-title">How the team is playing.</h2>
+    <p class="th-lede" id="th-lede"><span class="th-skel" style="width:100%"></span><span class="th-skel" style="width:70%"></span></p>
+  </div>
+  <div class="th-kpis" id="th-kpis" aria-busy="true">
+    <div class="th-kpi"><span class="th-skel" style="width:50%"></span><span class="th-skel th-skel-lg"></span><span class="th-skel" style="width:70%"></span></div>
+    <div class="th-kpi"><span class="th-skel" style="width:50%"></span><span class="th-skel th-skel-lg"></span><span class="th-skel" style="width:70%"></span></div>
+    <div class="th-kpi"><span class="th-skel" style="width:50%"></span><span class="th-skel th-skel-lg"></span><span class="th-skel" style="width:70%"></span></div>
+    <div class="th-kpi"><span class="th-skel" style="width:50%"></span><span class="th-skel th-skel-lg"></span><span class="th-skel" style="width:70%"></span></div>
+  </div>
+  <details class="th-caution" id="th-caution" hidden>
+    <summary id="th-caution-sum"></summary>
+    <div class="th-caution-body" id="th-caution-body"></div>
+  </details>
   <h2 class="th-h2">What stands out</h2>
-  <div class="th-finds" id="th-finds"></div>
-</section>
-
-<section class="th-pane" id="pane-scoring" data-pane="scoring" hidden>
-  <div class="th-card"><h3>Points</h3>
-    <p class="th-note">Goals, first assists and second assists for every player with a point. Hover for the details.</p>
-    <div class="th-chart" id="ch-points"></div></div>
-  <div class="th-grid">
-    <div class="th-card"><h3>Goals compared with expected goals</h3>
-      <p class="th-note">Goals scored minus the goals the shots were expected to produce. Right of zero means a player finished better than the chances. Players with at least one shot.</p>
-      <div class="th-chart" id="ch-fin"></div></div>
-    <div class="th-card"><h3>Shots</h3>
-      <p class="th-note">Every shot attempt against the ones that reached the goalie, top twelve by attempts.</p>
-      <div class="th-chart" id="ch-shots"></div></div>
-  </div>
-  <div class="th-card"><h3>Points per 60 minutes against ice time</h3>
-    <p class="th-note">Higher and further left means more production per minute played. Players with at least <span data-var="minGames"></span>.</p>
-    <div class="th-chart" id="ch-p60"></div></div>
-</section>
-
-<section class="th-pane" id="pane-impact" data-pane="impact" hidden>
-  <div class="th-grid">
-    <div class="th-card"><h3>Share of shot attempts while on the ice</h3>
-      <p class="th-note">Bars start at 50%. Right of the line means the team took more than half of the shot attempts with the player on the ice. Players with at least <span data-var="minGames"></span>.</p>
-      <div class="th-chart" id="ch-corsi"></div></div>
-    <div class="th-card"><h3>On-ice expected-goal margin per game</h3>
-      <p class="th-note">Expected goals for the team minus expected goals against while the player was on the ice. Above zero means the team made the better chances.</p>
-      <div class="th-chart" id="ch-netxg"></div></div>
-  </div>
-  <div class="th-card"><h3>Plus-minus against on-ice expected goals</h3>
-    <p class="th-note">Both axes are season totals while the player was on the ice. On the line means plus-minus matches the chances.</p>
-    <div class="th-chart" id="ch-pmxg"></div></div>
-  <div class="th-grid">
-    <div class="th-card"><h3>Pass accuracy, forwards</h3>
-      <p class="th-note">Share of passes that reached a teammate. Both pass charts use the same scale and start at <span data-var="passBase"></span>%, close to the middle of the team.</p>
-      <div class="th-chart" id="ch-pass-f"></div></div>
-    <div class="th-card"><h3>Pass accuracy, defense</h3>
-      <p class="th-note">Same scale as the forwards chart.</p>
-      <div class="th-chart" id="ch-pass-d"></div></div>
-  </div>
-  <div class="th-card"><h3>Zone entries and breakouts per game</h3>
-    <p class="th-note">Entries carry the puck into the offensive zone and breakouts get it out of the defensive zone.</p>
-    <div class="th-chart" id="ch-entries"></div></div>
-  <div class="th-card"><h3>Defense playmaking</h3>
-    <p class="th-note">The defensemen on the same scale in each panel, per game.</p>
-    <div class="th-grid3">
-      <div><h4>Passes to the slot</h4><div class="th-chart" id="ch-dslot"></div></div>
-      <div><h4>Breakouts</h4><div class="th-chart" id="ch-dbo"></div></div>
-      <div><h4>Shots</h4><div class="th-chart" id="ch-dsh"></div></div>
-    </div>
-  </div>
-</section>
-
-<section class="th-pane" id="pane-roles" data-pane="roles" hidden>
-  <div class="th-grid">
-    <div class="th-card"><h3>Ice time per game, forwards</h3><p class="th-note">Average time on ice.</p><div class="th-chart" id="ch-toi-f"></div></div>
-    <div class="th-card"><h3>Ice time per game, defense</h3><p class="th-note">Average time on ice.</p><div class="th-chart" id="ch-toi-d"></div></div>
-  </div>
-  <div class="th-card"><h3>Faceoffs taken and won</h3>
-    <p class="th-note">Label shows total draws and win percentage.</p>
-    <div class="th-chart" id="ch-fo"></div></div>
-  <div class="th-card"><h3>Faceoff win rate by zone</h3>
-    <p class="th-note">Bars start at 50%. Labels show draws won of draws taken, so a long bar on two draws means little.</p>
-    <div class="th-grid3">
-      <div><h4>Defensive zone</h4><div class="th-chart" id="ch-fz-dz"></div></div>
-      <div><h4>Neutral zone</h4><div class="th-chart" id="ch-fz-nz"></div></div>
-      <div><h4>Offensive zone</h4><div class="th-chart" id="ch-fz-oz"></div></div>
-    </div>
-    <p class="th-after" id="th-fz-sum"></p>
-  </div>
-  <div class="th-card"><h3>Penalties taken and drawn</h3>
-    <p class="th-note">Penalty minutes taken against penalties drawn, for players with either.</p>
-    <div class="th-chart" id="ch-pen"></div></div>
-  <div class="th-grid">
-    <div class="th-card"><h3>Power-play minutes</h3><p class="th-note">Season totals, top ten.</p><div class="th-chart" id="ch-pp"></div></div>
-    <div class="th-card"><h3>Penalty-kill minutes</h3><p class="th-note">Season totals, top ten.</p><div class="th-chart" id="ch-pk"></div></div>
-  </div>
-</section>
-
-<section class="th-pane" id="pane-last" data-pane="last" hidden>
-  <div class="th-card">
-    <h3>Each player against last season</h3>
-    <p class="th-note">Hollow dot is last season, filled dot is this season so far. Green means up and red means down, except where noted. Players who were not in last season's data are left out. Ice time is not shown, because this season's ice time looks under-logged (see Data notes).</p>
-    <div class="th-seg" role="group" aria-label="Measure" id="th-seg"></div>
-    <div class="th-chart" id="ch-last"></div>
-    <p class="th-after" id="th-last-sum"></p>
-  </div>
-</section>
-
-<section class="th-pane" id="pane-games" data-pane="games" hidden>
-  <div class="th-grid">
-    <div class="th-card"><h3>Goals and expected goals</h3><p class="th-note">Team goals against the goals the shots were worth, one pair of bars per game.</p><div class="th-chart" id="ch-g-goals"></div></div>
-    <div class="th-card"><h3>Shots</h3><p class="th-note">All shot attempts and shots on goal, per game.</p><div class="th-chart" id="ch-g-shots"></div></div>
-  </div>
-  <div class="th-card">
-    <h3>Game log</h3>
-    <p class="th-note">One row per export. Each game is the difference between two consecutive exports. The file has no opponent or final score.</p>
-    <div class="th-tablewrap"><table class="th-table" id="th-glog"><thead></thead><tbody></tbody></table></div>
-  </div>
+  <div class="th-lead" id="th-lead"></div>
+  <div class="th-more" id="th-more"></div>
 </section>
 
 <section class="th-pane" id="pane-players" data-pane="players" hidden>
@@ -151,8 +61,121 @@
   <div class="th-cards" id="th-cards"></div>
 </section>
 
-<section class="th-pane" id="pane-stats" data-pane="stats" hidden>
+<section class="th-pane" id="pane-team" data-pane="team" hidden>
+  <div class="th-filter th-sub" role="group" aria-label="Team section" id="th-sub">
+    <button type="button" class="th-fbtn" data-sub="scoring" aria-pressed="true">Scoring</button>
+    <button type="button" class="th-fbtn" data-sub="impact" aria-pressed="false">Possession and passing</button>
+    <button type="button" class="th-fbtn" data-sub="roles" aria-pressed="false">Ice time, faceoffs, penalties</button>
+  </div>
+  <p class="th-note th-legend" id="th-legend">In every chart, <span class="th-key g"></span>green is better than even, <span class="th-key bad"></span>orange is worse, and <span class="th-key n"></span>grey is a gap too small to mean much yet. Click or tap a player's row to open their card.</p>
+
+  <div class="th-sec" data-sec="scoring">
+    <h3 class="th-sr">Scoring</h3>
+    <div class="th-card"><h4 class="th-ch">Points</h4>
+      <p class="th-note">Goals, first assists and second assists for every player with a point.</p>
+      <div class="th-chart" id="ch-points"></div></div>
+    <div class="th-grid">
+      <div class="th-card"><h4 class="th-ch">Goals compared with expected goals</h4>
+        <p class="th-note">Goals scored minus the goals the shots were expected to produce. Right of zero means a player finished better than the chances. Players with at least one shot.</p>
+        <div class="th-chart" id="ch-fin"></div></div>
+      <div class="th-card"><h4 class="th-ch">Shots</h4>
+        <p class="th-note">Every shot attempt against the ones that reached the goalie, top twelve by attempts.</p>
+        <div class="th-chart" id="ch-shots"></div></div>
+    </div>
+    <div class="th-card"><h4 class="th-ch">Points per 60 minutes against ice time</h4>
+      <p class="th-note">Higher means more points for each 60 minutes on the ice. Further right means more ice time a game. Players with at least <span data-var="minGames"></span>.</p>
+      <div class="th-chart" id="ch-p60"></div></div>
+  </div>
+
+  <div class="th-sec" data-sec="impact" hidden>
+    <h3 class="th-sr">Possession and passing</h3>
+    <div class="th-grid">
+      <div class="th-card"><h4 class="th-ch">Shot share</h4>
+        <p class="th-note">The team's share of shot attempts while the player was on the ice. Bars start at 50%, which is even. The dashed line is the team median. Players with at least <span data-var="minGames"></span>.</p>
+        <div class="th-chart" id="ch-corsi"></div></div>
+      <div class="th-card"><h4 class="th-ch">On-ice expected-goal margin per game</h4>
+        <p class="th-note">Expected goals for the team minus expected goals against while the player was on the ice. Above zero means the team made the better chances.</p>
+        <div class="th-chart" id="ch-netxg"></div></div>
+    </div>
+    <div class="th-card"><h4 class="th-ch">Plus-minus against on-ice expected goals</h4>
+      <p class="th-note">Both axes are season totals while the player was on the ice. On the line means plus-minus matches the chances.</p>
+      <div class="th-chart" id="ch-pmxg"></div></div>
+    <div class="th-grid">
+      <div class="th-card"><h4 class="th-ch">Pass accuracy, forwards</h4>
+        <p class="th-note">Share of passes that reached a teammate. The dashed line is the team median, <span data-var="passBase"></span>%. Both pass charts use the same scale.</p>
+        <div class="th-chart" id="ch-pass-f"></div></div>
+      <div class="th-card"><h4 class="th-ch">Pass accuracy, defense</h4>
+        <p class="th-note">Same scale and median line as the forwards chart.</p>
+        <div class="th-chart" id="ch-pass-d"></div></div>
+    </div>
+    <div class="th-card"><h4 class="th-ch">Zone entries and breakouts per game</h4>
+      <p class="th-note">Entries carry the puck into the offensive zone and breakouts get it out of the defensive zone.</p>
+      <div class="th-chart" id="ch-entries"></div></div>
+    <div class="th-card"><h4 class="th-ch">Defense playmaking</h4>
+      <p class="th-note">The defensemen on the same scale in each panel, per game.</p>
+      <div class="th-grid3">
+        <div><h5>Passes to the slot</h5><div class="th-chart" id="ch-dslot"></div></div>
+        <div><h5>Breakouts</h5><div class="th-chart" id="ch-dbo"></div></div>
+        <div><h5>Shots</h5><div class="th-chart" id="ch-dsh"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="th-sec" data-sec="roles" hidden>
+    <h3 class="th-sr">Ice time, faceoffs and penalties</h3>
+    <p class="th-note th-flag" id="th-toi-flag" hidden>This season's ice time looks under-logged, so read these as relative minutes, not full-game minutes. Data has the details.</p>
+    <div class="th-grid">
+      <div class="th-card"><h4 class="th-ch">Ice time per game, forwards</h4><p class="th-note">Average time on ice.</p><div class="th-chart" id="ch-toi-f"></div></div>
+      <div class="th-card"><h4 class="th-ch">Ice time per game, defense</h4><p class="th-note">Average time on ice.</p><div class="th-chart" id="ch-toi-d"></div></div>
+    </div>
+    <div class="th-card"><h4 class="th-ch">Faceoffs taken and won</h4>
+      <p class="th-note">Each bar is every draw a player took, split into won and lost. The label is the win rate.</p>
+      <div class="th-chart" id="ch-fo"></div></div>
+    <div class="th-card"><h4 class="th-ch">Faceoff win rate by zone</h4>
+      <p class="th-note">Bars start at 50%. Labels show draws won of draws taken. Fewer than three draws in a zone stays grey, because a long bar on two draws means little.</p>
+      <div class="th-grid3">
+        <div><h5>Defensive zone</h5><div class="th-chart" id="ch-fz-dz"></div></div>
+        <div><h5>Neutral zone</h5><div class="th-chart" id="ch-fz-nz"></div></div>
+        <div><h5>Offensive zone</h5><div class="th-chart" id="ch-fz-oz"></div></div>
+      </div>
+      <p class="th-after" id="th-fz-sum"></p>
+    </div>
+    <div class="th-card"><h4 class="th-ch">Penalties</h4>
+      <p class="th-note">Penalty minutes taken and penalties drawn, each on its own scale, for players with either.</p>
+      <div class="th-grid3 th-grid2">
+        <div><h5>Penalty minutes taken</h5><div class="th-chart" id="ch-pim"></div></div>
+        <div><h5>Penalties drawn</h5><div class="th-chart" id="ch-drawn"></div></div>
+      </div>
+    </div>
+    <div class="th-grid">
+      <div class="th-card"><h4 class="th-ch">Power-play minutes</h4><p class="th-note">Season totals, top ten.</p><div class="th-chart" id="ch-pp"></div></div>
+      <div class="th-card"><h4 class="th-ch">Penalty-kill minutes</h4><p class="th-note">Season totals, top ten.</p><div class="th-chart" id="ch-pk"></div></div>
+    </div>
+  </div>
+</section>
+
+<section class="th-pane" id="pane-season" data-pane="season" hidden>
   <div class="th-card">
+    <h3>Each player against last season</h3>
+    <p class="th-note">The hollow dot is last season and the marker is this season so far. A right-pointing triangle is up and a left-pointing one is down. Grey means the change is too small to mean much yet. Players who were not in last season's data are left out. Ice time is not shown, because this season's ice time looks under-logged (see Data).</p>
+    <div class="th-filter" role="group" aria-label="Measure" id="th-seg"></div>
+    <div class="th-chart" id="ch-last"></div>
+    <p class="th-after" id="th-last-sum"></p>
+  </div>
+  <div class="th-grid">
+    <div class="th-card"><h3>Goals and expected goals</h3><p class="th-note">Team goals against the goals the shots were worth, per game.</p><div class="th-chart" id="ch-g-goals"></div></div>
+    <div class="th-card"><h3>Shots</h3><p class="th-note">All shot attempts and shots on goal, per game.</p><div class="th-chart" id="ch-g-shots"></div></div>
+  </div>
+  <div class="th-card">
+    <h3>Game log</h3>
+    <p class="th-note">One row per export. Each game is the difference between two consecutive exports. The file has no opponent or final score.</p>
+    <div class="th-tablewrap" tabindex="0" role="region" aria-label="Game log"><table class="th-table" id="th-glog"><thead></thead><tbody></tbody></table></div>
+  </div>
+</section>
+
+<section class="th-pane" id="pane-data" data-pane="data" hidden>
+  <div class="th-card">
+    <h3>All stats</h3>
     <div class="th-tools">
       <input type="search" id="th-q" class="th-q" placeholder="Search players" aria-label="Search players">
       <div class="th-filter" role="group" aria-label="Position filter">
@@ -161,30 +184,30 @@
         <button type="button" class="th-sbtn" data-s="D" aria-pressed="false">Defense</button>
       </div>
     </div>
-    <div class="th-tablewrap"><table class="th-table" id="th-table"><thead></thead><tbody></tbody></table></div>
-    <p class="th-note">G-xG is goals minus expected goals. On-ice xG is the team's expected-goal margin with the player on the ice, as a season total. Shot % is the team's share of shot attempts with the player on the ice. Totals are per-game averages times games played, rounded.</p>
+    <details class="th-keys"><summary>What the columns mean</summary><dl class="th-keylist" id="th-keylist"></dl></details>
+    <div class="th-tablewrap" tabindex="0" role="region" aria-label="All stats, sortable"><table class="th-table" id="th-table"><thead></thead><tbody></tbody></table></div>
+    <p class="th-note">Totals are per-game averages times games played, rounded. Per-game columns are averages.</p>
   </div>
-</section>
 
-<section class="th-pane" id="pane-notes" data-pane="notes" hidden>
   <div class="th-card th-prose">
-    <h2>Data notes</h2>
-    <h3>Where the numbers come from</h3>
+    <h3>Data notes</h3>
+    <h4>Where the numbers come from</h4>
     <p>Each export is a spreadsheet of skater statistics for the season so far, with per-game averages for each player. Season totals here are the per-game average multiplied by games played and rounded, so a total can be off by one. A single game is the difference between two exports. Points are goals plus assists. This page is through game <span data-var="games"></span>, from the export of <span data-var="updated"></span>.</p>
     <p>The file has skaters only. It has no goalie statistics, opponent, final score, injuries, line combinations or zone starts. Team goals, shots and expected goals are the sum of the skaters. Whether a goal went against the team is only visible as goals against while a skater was on the ice.</p>
-    <h3>Ice time looks under-logged</h3>
+    <h4>Ice time looks under-logged</h4>
     <p>Last season's exports added up to about 59 minutes of ice time per 60-minute game (the sum of every skater's minutes divided by five). Game 1 adds up to about 41 minutes, while shots and goals look like a normal game. If part of the game was not logged, then ice time, points per 60 and per-game counts like entries and breakouts will read low or high. Shot share, pass accuracy and faceoff percentages are ratios and hold up better. The page checks this on every update and shows a warning on the Overview tab when the total is under 55 minutes.</p>
-    <h3>Choices made</h3>
+    <h4>Choices made</h4>
     <p>Shot share is the team's shot attempts divided by all shot attempts while the player was on the ice, calculated from the attempt counts. Last season's figures in the comparison come from the same spreadsheet column that last year's dashboard used, so a small difference in method is possible. Rate charts leave out players with fewer than half the team's games.</p>
+    <p>Green and orange compare against an even line: zero for margins, 50% for shot share and faceoffs. Gaps smaller than a noise threshold are drawn grey. The threshold shrinks as games are added, so early-season charts are mostly grey on purpose. Pass accuracy is compared with the team median and is not colored, because being below the median is not the same as being bad.</p>
     <p>Expected goals (xG) and the on-ice margin come from the data provider's model, not from this analysis. Power-play and penalty-kill time are empty in the game 1 export even though penalties were drawn, so those two charts stay hidden until the columns fill in.</p>
-    <h3>How to read the luck language</h3>
+    <h4>How to read the luck language</h4>
     <p>When a player scores fewer goals than expected, the usual explanation is variance and the expected-goals value tends to be a better guide to the next game than the actual total. That is a tendency, not a rule, and the first few games are a very small sample. The same goes for plus-minus compared with the on-ice chance margin.</p>
   </div>
 </section>
+</main>
 </div>
 </div>
-</div>
-<script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
+<script src="vendor/d3.min.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
