@@ -21,6 +21,8 @@ git commit -m "Game 2"
 git push
 ```
 
+If an export covers only some games instead of the season so far, put the range at the end of its name, like `Skaters_-_Skidmore_Thoroughbreds_18-Nov-2026_games-2-3.xlsx`. The script adds it to the other exports and stops if the games don't line up. If an export leaves out columns, as the games 2-3 one does (no xG, shot attempts, passing, entries or power-play time), those stats come from the games that have them, and the site says which games on every chart that uses them.
+
 If two exports cover the same game, the one with the later date wins. If a player appears on two rows of an export, the script stops and tells you which one to merge.
 
 ## Hand-tracked faceoffs

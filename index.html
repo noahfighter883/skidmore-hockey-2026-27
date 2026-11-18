@@ -77,6 +77,7 @@
       <div class="th-chart" id="ch-points"></div></div>
     <div class="th-grid">
       <div class="th-card"><h4 class="th-ch">Goals compared with expected goals</h4>
+        <p class="th-srcline" data-fam="xg" hidden></p>
         <p class="th-note">Goals scored minus the goals the shots were expected to produce. Right of zero means a player finished better than the chances. Players with at least one shot.</p>
         <div class="th-chart" id="ch-fin"></div></div>
       <div class="th-card"><h4 class="th-ch">Shots</h4>
@@ -92,28 +93,35 @@
     <h3 class="th-sr">Possession and passing</h3>
     <div class="th-grid">
       <div class="th-card"><h4 class="th-ch">Shot share</h4>
-        <p class="th-note">The team's share of shot attempts while the player was on the ice. Bars start at 50%, which is even. The dashed line is the team median. Players with at least <span data-var="minGames"></span>.</p>
+        <p class="th-srcline" data-fam="corsi" hidden></p>
+        <p class="th-note">The team's share of shot attempts while the player was on the ice. Bars start at 50%, which is even. The dashed line is the team median. Players with at least <span data-var="minCorsi"></span> of shot data.</p>
         <div class="th-chart" id="ch-corsi"></div></div>
       <div class="th-card"><h4 class="th-ch">On-ice expected-goal margin per game</h4>
+        <p class="th-srcline" data-fam="xg" hidden></p>
         <p class="th-note">Expected goals for the team minus expected goals against while the player was on the ice. Above zero means the team made the better chances.</p>
         <div class="th-chart" id="ch-netxg"></div></div>
     </div>
     <div class="th-card"><h4 class="th-ch">Plus-minus against on-ice expected goals</h4>
+      <p class="th-srcline" data-fam="xg" hidden></p>
       <p class="th-note">Both axes are season totals while the player was on the ice. On the line means plus-minus matches the chances.</p>
       <div class="th-chart" id="ch-pmxg"></div></div>
     <div class="th-grid">
       <div class="th-card"><h4 class="th-ch">Pass accuracy, forwards</h4>
+        <p class="th-srcline" data-fam="pass" hidden></p>
         <p class="th-note">Share of passes that reached a teammate. The dashed line is the team median, <span data-var="passBase"></span>%. Both pass charts use the same scale.</p>
         <div class="th-chart" id="ch-pass-f"></div></div>
       <div class="th-card"><h4 class="th-ch">Pass accuracy, defense</h4>
+        <p class="th-srcline" data-fam="pass" hidden></p>
         <p class="th-note">Same scale and median line as the forwards chart.</p>
         <div class="th-chart" id="ch-pass-d"></div></div>
     </div>
     <div class="th-card"><h4 class="th-ch">Zone entries and breakouts per game</h4>
+      <p class="th-srcline" data-fam="entries" hidden></p>
       <p class="th-note">Entries carry the puck into the offensive zone and breakouts get it out of the defensive zone.</p>
       <div class="th-chart" id="ch-entries"></div></div>
     <div class="th-card"><h4 class="th-ch">Defense playmaking</h4>
       <p class="th-note">The defensemen on the same scale in each panel, per game.</p>
+      <p class="th-srcline" data-fam="entries" hidden></p>
       <div class="th-grid3">
         <div><h5>Passes to the slot</h5><div class="th-chart" id="ch-dslot"></div></div>
         <div><h5>Breakouts</h5><div class="th-chart" id="ch-dbo"></div></div>
@@ -177,12 +185,12 @@
     <p class="th-after" id="th-last-sum"></p>
   </div>
   <div class="th-grid">
-    <div class="th-card"><h3>Goals and expected goals</h3><p class="th-note">Team goals against the goals the shots were worth, per game.</p><div class="th-chart" id="ch-g-goals"></div></div>
-    <div class="th-card"><h3>Shots</h3><p class="th-note">All shot attempts and shots on goal, per game.</p><div class="th-chart" id="ch-g-shots"></div></div>
+    <div class="th-card"><h3>Goals and expected goals</h3><p class="th-note">Team goals against the goals the shots were worth, per game. An export that covers several games shows as its per-game average.</p><div class="th-chart" id="ch-g-goals"></div></div>
+    <div class="th-card"><h3>Shots</h3><p class="th-note">All shot attempts and shots on goal, per game. An export that covers several games shows as its per-game average.</p><div class="th-chart" id="ch-g-shots"></div></div>
   </div>
   <div class="th-card">
     <h3>Game log</h3>
-    <p class="th-note">One row per export. Each game is the difference between two consecutive exports. The file has no opponent or final score.</p>
+    <p class="th-note">One row per export. A season-to-date export becomes one game, the difference from the export before it. An export that covers several games stays one row with its totals. The files have no opponent or final score.</p>
     <div class="th-tablewrap" tabindex="0" role="region" aria-label="Game log"><table class="th-table" id="th-glog"><thead></thead><tbody></tbody></table></div>
   </div>
 </section>
@@ -201,6 +209,8 @@
     <details class="th-keys"><summary>What the columns mean</summary><dl class="th-keylist" id="th-keylist"></dl></details>
     <div class="th-tablewrap" tabindex="0" role="region" aria-label="All stats, sortable"><table class="th-table" id="th-table"><thead></thead><tbody></tbody></table></div>
     <p class="th-note">Totals are per-game averages times games played, rounded. Per-game columns are averages.</p>
+    <p class="th-srcline" data-fam="xg" hidden></p>
+    <p class="th-srcline" data-fam="corsi" hidden></p>
   </div>
 
   <div class="th-card th-prose">
@@ -214,6 +224,8 @@
     <p>Shot share is the team's shot attempts divided by all shot attempts while the player was on the ice, calculated from the attempt counts. Last season's figures in the comparison come from the same spreadsheet column that last year's dashboard used, so a small difference in method is possible. Rate charts leave out players with fewer than half the team's games.</p>
     <p>Green and orange compare against an even line: zero for margins, 50% for shot share and faceoffs. Gaps smaller than a noise threshold are drawn grey. The threshold shrinks as games are added, so early-season charts are mostly grey on purpose. Pass accuracy is compared with the team median and is not colored, because being below the median is not the same as being bad.</p>
     <p>Expected goals (xG) and the on-ice margin come from the data provider's model, not from this analysis. Power-play and penalty-kill time are empty in the game 1 export even though penalties were drawn, so those two charts stay hidden until the columns fill in.</p>
+    <h4>Exports that cover only some games</h4>
+    <p>An export normally covers the season so far. One that covers only some games, like games 2 and 3 together, says so in its file name, and its numbers are added to the rest. Some exports leave out columns. When a stat is missing from an export, that stat is calculated from the games that have it, against the goals, ice time and plus-minus from those same games, and every chart that uses it says which games those are.</p>
     <h4>Two sets of faceoff numbers</h4>
     <p id="th-fo-notes">Faceoffs can come from two places. The data export is the same spreadsheet as everything else. The hand count is tallied at the rink and typed into data/faceoffs-hand.json. Wherever the page shows a faceoff number, it says which one it is.</p>
     <h4>How to read the luck language</h4>

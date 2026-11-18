@@ -302,22 +302,23 @@
   function gcols(el, rows, o) {
     const w = el.clientWidth;
     if (!w || !rows.length) { el.replaceChildren(); return; }
-    const svg = mkSvg(el, rows.map((r) => `Game ${r.game}: ${o.series.map((s) => s.name.toLowerCase() + ' ' + (s.fmt || String)(r[s.f])).join(', ')}`));
+    const svg = mkSvg(el, rows.map((r) => `${r.first && r.first !== r.game ? `Games ${r.first} to ${r.game}` : 'Game ' + r.game}: ${o.series.map((s) => s.name.toLowerCase() + ' ' + (r[s.f] == null ? 'not in export' : (s.fmt || String)(r[s.f]))).join(', ')}`));
     const H = 270, m = { t: legend(svg, 38, o.series, w) + 6, r: 10, b: 28, l: 38 };
     svg.attr('height', H).attr('viewBox', `0 0 ${w} ${H}`);
-    const x0 = d3.scaleBand(rows.map((r) => r.game), [m.l, w - m.r]).padding(0.25);
+    const lab = (r) => (r.first && r.first !== r.game ? `Games ${r.first}–${r.game}` : 'Game ' + r.game);
+    const x0 = d3.scaleBand(rows.map(lab), [m.l, w - m.r]).padding(0.25);
     const bw = Math.min(x0.bandwidth() / o.series.length, 44), cw = bw * o.series.length;
-    const hi = d3.max(rows, (r) => d3.max(o.series, (s) => r[s.f]));
+    const hi = d3.max(rows, (r) => d3.max(o.series, (s) => r[s.f] || 0));
     const y = d3.scaleLinear([0, hi * 1.1], [H - m.b, m.t]).nice(5);
     axisStyle(svg.append('g').attr('transform', `translate(${m.l},0)`).call(d3.axisLeft(y).ticks(5).tickSize(-(w - m.l - m.r))));
-    axisStyle(svg.append('g').attr('transform', `translate(0,${H - m.b})`).call(d3.axisBottom(x0).tickSize(0).tickFormat((g) => 'Game ' + g)));
+    axisStyle(svg.append('g').attr('transform', `translate(0,${H - m.b})`).call(d3.axisBottom(x0).tickSize(0).tickFormat((g) => g)));
     svg.append('line').attr('x1', m.l).attr('x2', w - m.r).attr('y1', y(0)).attr('y2', y(0)).style('stroke', 'var(--chart-axis)');
     legend(svg, m.l, o.series, w, true);
     const tip = tipFor(el);
-    const gr = svg.selectAll('g.c').data(rows).join('g').attr('class', 'c').attr('transform', (r) => `translate(${x0(r.game) + (x0.bandwidth() - cw) / 2},0)`);
+    const gr = svg.selectAll('g.c').data(rows).join('g').attr('class', 'c').attr('transform', (r) => `translate(${x0(lab(r)) + (x0.bandwidth() - cw) / 2},0)`);
     o.series.forEach((s, k) => {
-      gr.append('rect').attr('x', k * bw + 1).attr('width', bw - 2).attr('rx', 3).attr('y', (r) => y(r[s.f])).attr('height', (r) => y(0) - y(r[s.f])).style('fill', s.color);
-      gr.append('text').attr('x', k * bw + bw / 2).attr('y', (r) => y(r[s.f]) - 5).attr('text-anchor', 'middle').attr('font-size', 11).style('fill', 'var(--ink2)').text((r) => (s.fmt || String)(r[s.f]));
+      gr.append('rect').attr('x', k * bw + 1).attr('width', bw - 2).attr('rx', 3).attr('y', (r) => y(r[s.f] || 0)).attr('height', (r) => y(0) - y(r[s.f] || 0)).style('fill', s.color);
+      gr.append('text').attr('x', k * bw + bw / 2).attr('y', (r) => y(r[s.f] || 0) - 5).attr('text-anchor', 'middle').attr('font-size', 11).style('fill', 'var(--ink2)').text((r) => (r[s.f] == null ? 'no data' : (s.fmt || String)(r[s.f])));
     });
     const hit = gr.append('rect').attr('width', cw).attr('y', m.t).attr('height', H - m.t - m.b).style('fill', 'transparent');
     bindRows(hit, null, { tip: o.tip, player: false }, tip);
@@ -362,6 +363,13 @@
   const sum = (f) => d3.sum(P, (r) => r[f]);
   const pctOf = (a, c) => (c ? Math.round((a / c) * 100) : 0);
   const gamesTxt = (gs) => (gs.length === 1 ? 'game ' + gs[0] : 'games ' + list(gs.map(String)));
+  /* some exports leave out xG, shot attempts, passing, entries and PP/PK; season.json says which games have each */
+  const cov = (f) => (S.cover && S.cover[f]) || d3.range(1, G + 1);
+  const part = (f) => cov(f).length < G;
+  const gN = (f) => Math.max(1, cov(f).length);
+  const inTxt = (f) => (part(f) ? ` in ${gamesTxt(cov(f))}` : '');
+  const FAM_WHAT = { xg: 'expected goals', corsi: 'shot attempts for and against', pass: 'pass accuracy', entries: 'zone entries and breakouts', pp: 'power-play and penalty-kill time' };
+  const famNote = (f) => `${gamesTxt(cov(f)).replace(/^./, (c) => c.toUpperCase())} only. The export for ${gamesTxt(d3.range(1, G + 1).filter((g) => !cov(f).includes(g)))} has no ${FAM_WHAT[f]}.`;
   /* the hand count stands in for the export only when it covers every game played */
   const handFull = () => HP.length > 0 && HG.length === G && HG.every((g, i) => g === i + 1);
   const FO = {
@@ -374,7 +382,7 @@
 
   function insights() {
     const out = [];
-    const s = Math.sqrt(G);
+    const s = Math.sqrt(gN('xg'));
     const first = (r) => esc(r.short);
 
     const goals = sum('g'), xg = sum('xg');
@@ -385,31 +393,32 @@
       id: 'scoring', eyebrow: 'Scoring', go: 'team/scoring', link: 'points charts',
       title: !lead.length ? 'No points yet' : lead.length === 1 ? `${lead[0].short} leads with ${count(maxP, 'point')}` : `${list(lead.map((r) => r.short))} lead with ${count(maxP, 'point')} each`,
       body: goals === 0 ? 'The team has not scored yet.'
-        : `The team scored ${b(goals)} on ${b(f1(xg))} expected goals, from ${count(scorers.length, 'different scorer')}: ${list(scorers.map((r) => first(r) + (r.g > 1 ? ' (' + r.g + ')' : '')))}.`
+        : `The team scored ${b(goals)}${part('xg') ? '' : ` on ${b(f1(xg))} expected goals`}, from ${count(scorers.length, 'different scorer')}: ${list(scorers.map((r) => first(r) + (r.g > 1 ? ' (' + r.g + ')' : '')))}.`
           + (lead.length === 1 ? ` ${first(lead[0])} had ${count(lead[0].g, 'goal')} and ${count(lead[0].a, 'assist')}.` : ''),
     });
 
     const over = P.filter((r) => r.gxg >= 0.5 * s).sort(byDesc('gxg')).slice(0, 3);
     const under = P.filter((r) => r.xg >= 0.4 * s && r.gxg <= -0.4 * s).sort((a, c) => a.gxg - c.gxg).slice(0, 3);
-    const caveat = G < 5 ? `With ${count(G, 'game')} played, treat this as noise. Expected goals is a model, and gaps this size usually shrink.` : 'Expected goals is a model, and gaps this size often shrink over a season.';
+    const caveat = (part('xg') ? `Expected goals exist only for ${gamesTxt(cov('xg'))}, so this compares goals and chances from ${cov('xg').length === 1 ? 'that game' : 'those games'}. ` : '')
+      + (gN('xg') < 5 ? `With ${count(gN('xg'), 'game')} of expected goals, treat this as noise. Expected goals is a model, and gaps this size usually shrink.` : 'Expected goals is a model, and gaps this size often shrink over a season.');
     out.push({
       id: 'finishing', eyebrow: 'Finishing', go: 'team/scoring', link: 'finishing chart',
       title: over.length ? `${list(over.slice(0, 2).map((r) => r.short))} scored well above the chances` : 'Nobody is far from their chances',
       body: [
-        over.length ? `${list(over.map((r) => `${first(r)} (${r.g} on ${f1(r.xg)} expected)`))} scored more than the shots were worth.` : '',
-        under.length ? `${list(under.map((r) => `${first(r)} (${r.g} on ${f1(r.xg)})`))} scored less.` : '',
+        over.length ? `${list(over.map((r) => `${first(r)} (${r.g_xg} on ${f1(r.xg)} expected)`))} scored more than the shots were worth.` : '',
+        under.length ? `${list(under.map((r) => `${first(r)} (${r.g_xg} on ${f1(r.xg)})`))} scored less.` : '',
         caveat,
       ].filter(Boolean).join(' '),
     });
 
-    const el = P.filter((r) => r.gp >= minGP && r.corsi != null).sort(byDesc('corsi'));
+    const el = P.filter((r) => r.corsi != null && r.gp_corsi >= minFor('corsi')).sort(byDesc('corsi'));
     if (el.length >= 6) {
       const top = el.slice(0, 3), low = el.slice(-3).reverse();
-      const bx = P.slice().sort(byDesc('netxg_pg'))[0];
+      const bx = P.filter((r) => r.netxg_pg != null).sort(byDesc('netxg_pg'))[0];
       out.push({
         id: 'possession', eyebrow: 'Possession', go: 'team/impact', link: 'shot-share charts',
         title: `${top[0].short} had the best shot share, ${Math.round(top[0].corsi)}%`,
-        body: `With ${list(top.map((r) => `${first(r)} (${Math.round(r.corsi)}%)`))} on the ice, the team took the biggest share of shot attempts. The lowest were ${list(low.map((r) => `${first(r)} (${Math.round(r.corsi)}%)`))}. Fifty percent is even. ${first(bx)} had the best expected-goal margin, ${signed(bx.netxg_pg, f2)} a game.`,
+        body: (part('corsi') ? `${famNote('corsi')} ` : '') + `With ${list(top.map((r) => `${first(r)} (${Math.round(r.corsi)}%)`))} on the ice, the team took the biggest share of shot attempts. The lowest were ${list(low.map((r) => `${first(r)} (${Math.round(r.corsi)}%)`))}. Fifty percent is even. ${first(bx)} had the best expected-goal margin, ${signed(bx.netxg_pg, f2)} a game.`,
       });
     }
 
@@ -461,11 +470,14 @@
 
   function drawOverview() {
     const goals = sum('g'), sog = sum('sog'), shots = sum('shots'), fo = sum('fo'), fow = sum('fow');
-    $('#th-lede').innerHTML = `After ${count(G, 'game')}, the team has ${b(goals)} goals from ${b(sog)} shots on goal, and the shots were worth ${b(f1(sum('xg')))} expected goals.`
+    const xgLog = S.log.filter((l) => l.xg != null), xgG = d3.sum(xgLog, (l) => l.g), xgV = d3.sum(xgLog, (l) => l.xg);
+    $('#th-lede').innerHTML = `After ${count(G, 'game')}, the team has ${b(goals)} goals from ${b(sog)} shots on goal` + (part('xg')
+      ? (xgLog.length ? `. Expected goals exist only for ${gamesTxt(cov('xg'))}, where ${b(xgG)} goals came on ${b(f1(xgV))} expected.` : '.')
+      : `, and the shots were worth ${b(f1(sum('xg')))} expected goals.`)
       + (S.log.length && S.log[S.log.length - 1].ga_min === 0 ? ' No skater was on the ice for a goal against in the latest game.' : '');
     const kpi = (l, v, s2) => `<div class="th-kpi"><div class="th-kpi-l">${l}</div><div class="th-kpi-v">${v}</div><div class="th-kpi-s">${s2}</div></div>`;
     const k = $('#th-kpis');
-    k.innerHTML = kpi('Goals', goals, f1(sum('xg')) + ' expected')
+    k.innerHTML = kpi('Goals', goals, part('xg') ? `${f1(xgV)} expected${inTxt('xg')} (${xgG} scored)` : f1(sum('xg')) + ' expected')
       + kpi('Shots on goal', sog, `of ${shots} attempts (${pctOf(sog, shots)}%)`)
       + (handFull()
         ? kpi('Faceoffs won', pctOf(foSum('hand', 'fow'), foSum('hand', 'fo')) + '%', `${foSum('hand', 'fow')} of ${foSum('hand', 'fo')} by hand count. Export: ${fow} of ${fo}`)
@@ -475,20 +487,24 @@
 
     /* one caution strip instead of two banners: a one-line summary, details on demand */
     const early = G < 8, ice = !iceOK(), foGap = handFull() && foSum('hand', 'fo') !== sum('fo');
+    const gaps = Object.keys(FAM_WHAT).filter(part);
     const lastIce = (() => { const v = Object.values(LAST); const gm = d3.max(v, (l) => l.gp); return gm ? d3.sum(v, (l) => l.toi * l.gp) / (5 * gm) : 0; })();
     const cz = $('#th-caution');
-    cz.hidden = !early && !ice && !foGap;
+    cz.hidden = !early && !ice && !foGap && !gaps.length;
     const bits = [];
     if (early) bits.push(G < 3 ? `${count(G, 'game')} of data` : `Only ${G} games in`);
     if (ice) bits.push('ice time looks under-logged');
     if (foGap) bits.push("the export's faceoffs don't match the hand count");
+    if (gaps.length) bits.push(`some stats cover only ${gamesTxt(cov(gaps[0]))}`);
     $('#th-caution-sum').innerHTML = `<span class="th-dot${ice ? ' warn' : ''}" aria-hidden="true"></span><span><b>Read with care:</b> ${esc((bits.length > 1 ? bits.slice(0, -1).join(', ') + ' and ' + bits[bits.length - 1] : bits[0] || ''))}.</span>`;
     const body = [];
     if (early) body.push(G < 3
       ? `<p><b>Very early.</b> This is ${count(G, 'game')} of data, so every number describes one night, not a pattern. Read the charts as a snapshot and start looking for trends after about five games.</p>`
       : `<p><b>Still early.</b> After ${G} games, one big night can still swing a total. Rates and plus-minus are the shakiest numbers.</p>`);
-    if (ice) body.push(`<p><b>Check the ice time.</b> The skaters' ice time adds up to about ${Math.round(tracked)} minutes per 60-minute game${lastIce ? ` (last season's exports added up to about ${Math.round(lastIce)})` : ''}. Shots and goals look like a full game, so some ice time was probably not logged. Until that is sorted out, treat ice time and per-60 numbers as low-confidence and lean on shot share, pass accuracy and faceoffs.</p>`);
+    const perGame = S.log.filter((l) => l.toi != null).map((l) => `${l.first === l.game ? 'game ' + l.game : `games ${l.first} to ${l.game}`} about ${Math.round(l.toi)}`);
+    if (ice) body.push(`<p><b>Check the ice time.</b> The skaters' ice time adds up to about ${Math.round(tracked)} minutes per 60-minute game${perGame.length > 1 ? ` (${perGame.join(', ')})` : ''}${lastIce ? `, against about ${Math.round(lastIce)} last season` : ''}. Shots and goals look like a full game, so some ice time was probably not logged. Until that is sorted out, treat ice time and per-60 numbers as low-confidence and lean on shot share, pass accuracy and faceoffs.</p>`);
     if (foGap) body.push(`<p><b>Two faceoff counts.</b> The hand count at the rink has ${foSum('hand', 'fow')} of ${foSum('hand', 'fo')} draws won. The data export has ${sum('fow')} of ${sum('fo')}, and some players' numbers differ a lot. The page uses the hand count for faceoffs by default and labels every faceoff number with its source. The Team tab has both, side by side.</p>`);
+    if (gaps.length) body.push(`<p><b>Some stats cover fewer games.</b> The export for ${gamesTxt(d3.range(1, G + 1).filter((g) => !cov(gaps[0]).includes(g)))} leaves out ${list(gaps.map((f) => FAM_WHAT[f]))}. Those numbers come from ${gamesTxt(cov(gaps[0]))} only, and each chart that uses them says so.</p>`);
     $('#th-caution-body').innerHTML = body.join('');
 
     const all = insights();
@@ -500,7 +516,8 @@
   }
 
   /* ---------- team ---------- */
-  const fin = (r) => tone(r.gxg, 0, 0.25 * Math.sqrt(G));
+  const fin = (r) => tone(r.gxg, 0, 0.25 * Math.sqrt(gN('xg')));
+  const minFor = (f) => Math.max(1, Math.ceil(gN(f) / 2));
   const SEC = {
     scoring() {
       const pts = P.filter((r) => r.p > 0).sort((a, c) => c.p - a.p || c.g - a.g || a.name.localeCompare(c.name));
@@ -508,10 +525,10 @@
         label: (r) => r.short, total: (r) => r.p, series: [{ name: 'Goals', f: 'g', color: C.g }, { name: 'First assists', f: 'a1', color: C.s2 }, { name: 'Second assists', f: 'a2', color: C.s3 }],
         tip: (r) => [r.name, `${r.p} points in ${count(r.gp, 'game')}`, `${r.g} goals, ${r.a1} first assists, ${r.a2} second assists`],
       });
-      hbar($('#ch-fin'), P.filter((r) => r.shots > 0).sort(byDesc('gxg')), {
+      hbar($('#ch-fin'), P.filter((r) => r.gxg != null && r.xg > 0).sort(byDesc('gxg')), {
         label: (r) => r.short, value: (r) => r.gxg, color: fin, rowH: 22,
         vlabel: (r) => signed(r.gxg, f2), tick: (d) => (d > 0 ? '+' + d : d),
-        tip: (r) => [r.name, `${r.g} goals, ${f2(r.xg)} expected`, `${r.shots} shots, ${r.shpct}% scored`],
+        tip: (r) => [r.name, `${r.g_xg} goals, ${f2(r.xg)} expected${inTxt('xg')}`],
       });
       gbar($('#ch-shots'), P.slice().sort(byDesc('shots')).slice(0, 12), {
         label: (r) => r.short, series: [{ name: 'Attempts', f: 'shots', color: C.s2 }, { name: 'On goal', f: 'sog', color: C.g }],
@@ -527,17 +544,17 @@
       });
     },
     impact() {
-      const base = P.filter((r) => r.gp >= minGP && r.corsi != null);
+      const base = P.filter((r) => r.corsi != null && r.gp_corsi >= minFor('corsi'));
       const cmed = d3.median(base, (r) => r.corsi);
       hbar($('#ch-corsi'), base.slice().sort(byDesc('corsi')), {
-        label: (r) => r.short, value: (r) => r.corsi, base: 50, color: (r) => tone(r.corsi, 50, 5 / Math.sqrt(G)), rowH: 22,
+        label: (r) => r.short, value: (r) => r.corsi, base: 50, color: (r) => tone(r.corsi, 50, 5 / Math.sqrt(gN('corsi'))), rowH: 22,
         vlabel: (r) => Math.round(r.corsi) + '%', tick: (d) => d + '%', ref: { v: cmed, label: `Team median ${Math.round(cmed)}%` },
         tip: (r) => [r.name, `${f1(r.corsi)}% of shot attempts`, `${count(r.gp, 'game')}`],
       });
-      hbar($('#ch-netxg'), P.slice().sort(byDesc('netxg_pg')), {
-        label: (r) => r.short, value: (r) => r.netxg_pg, color: (r) => tone(r.netxg_pg, 0, 0.25 / Math.sqrt(G)), rowH: 22,
+      hbar($('#ch-netxg'), P.filter((r) => r.netxg_pg != null).sort(byDesc('netxg_pg')), {
+        label: (r) => r.short, value: (r) => r.netxg_pg, color: (r) => tone(r.netxg_pg, 0, 0.25 / Math.sqrt(gN('xg'))), rowH: 22,
         vlabel: (r) => signed(r.netxg_pg, f2), tick: (d) => (d > 0 ? '+' + d : d),
-        tip: (r) => [r.name, `Team ${f2(r.xgf)} expected for, ${f2(r.xga)} against`, `Margin ${signed(r.netxg, f2)} over ${count(r.gp, 'game')}`],
+        tip: (r) => [r.name, `Team ${f2(r.xgf)} expected for, ${f2(r.xga)} against`, `Margin ${signed(r.netxg, f2)} over ${count(r.gp_xg, 'game')}`],
       });
       if (!gate('#ch-pmxg', 5)) {
         const lo = Math.floor(d3.min(base, (r) => Math.min(r.netxg, r.pm, 0))) - 1, hi = Math.ceil(d3.max(base, (r) => Math.max(r.netxg, r.pm))) + 1;
@@ -560,14 +577,14 @@
       const byPass = (pos) => base.filter((r) => (r.pos === 'D') === (pos === 'D')).sort(byDesc('accpass'));
       hbar($('#ch-pass-f'), byPass('F'), passOpt);
       hbar($('#ch-pass-d'), byPass('D'), passOpt);
-      gbar($('#ch-entries'), base.slice().sort((a, c) => c.entries + c.breakouts - (a.entries + a.breakouts)), {
+      gbar($('#ch-entries'), base.filter((r) => r.entries != null).sort((a, c) => c.entries + c.breakouts - (a.entries + a.breakouts)), {
         label: (r) => r.short, series: [{ name: 'Entries', f: 'entries', color: C.g }, { name: 'Breakouts', f: 'breakouts', color: C.s2 }],
         tip: (r) => [r.name, `Entries ${r.entries} a game`, `Breakouts ${r.breakouts} a game`],
       });
       const D = P.filter((r) => r.pos === 'D').sort(byDesc('slot'));
       const dopt = (f, lab, fmt) => ({ label: (r) => r.short, value: (r) => r[f], color: () => C.g, rowH: 24, vlabel: (r) => fmt(r[f]), tip: (r) => [r.name, `${lab} ${r[f]} a game`, `${count(r.gp, 'game')}`] });
       hbar($('#ch-dslot'), D, dopt('slot', 'Passes to the slot', f2));
-      hbar($('#ch-dbo'), D.slice().sort(byDesc('breakouts')), dopt('breakouts', 'Breakouts', f1));
+      hbar($('#ch-dbo'), D.filter((r) => r.breakouts != null).sort(byDesc('breakouts')), dopt('breakouts', 'Breakouts', f1));
       hbar($('#ch-dsh'), D.slice().sort(byDesc('shots_pg')), dopt('shots_pg', 'Shots', f1));
     },
     roles() {
@@ -646,15 +663,15 @@
   /* ---------- season ---------- */
   const METRICS = [
     { k: 'ppg', label: 'Points per game', noise: 0.5, cur: (r) => r.ppg, prev: (l) => l.ppg, dfmt: (v) => signed(v, f2) },
-    { k: 'corsi', label: 'Shot share', noise: 5, cur: (r) => r.corsi, prev: (l) => l.corsi, dfmt: (v) => signed(v) + ' pts' },
-    { k: 'accpass', label: 'Pass accuracy', noise: 4, cur: (r) => r.accpass, prev: (l) => l.accpass, dfmt: (v) => signed(v, f0) + ' pts' },
-    { k: 'netxg60', label: 'On-ice xG margin per 60', noise: 1.5, cur: (r) => r.netxg60, prev: (l) => (l.toi ? (l.netxg_pg / l.toi) * 60 : 0), dfmt: (v) => signed(v, f2) },
+    { k: 'corsi', fam: 'corsi', label: 'Shot share', noise: 5, cur: (r) => r.corsi, prev: (l) => l.corsi, dfmt: (v) => signed(v) + ' pts' },
+    { k: 'accpass', fam: 'pass', label: 'Pass accuracy', noise: 4, cur: (r) => r.accpass, prev: (l) => l.accpass, dfmt: (v) => signed(v, f0) + ' pts' },
+    { k: 'netxg60', fam: 'xg', label: 'On-ice xG margin per 60', noise: 1.5, cur: (r) => r.netxg60, prev: (l) => (l.toi ? (l.netxg_pg / l.toi) * 60 : 0), dfmt: (v) => signed(v, f2) },
   ];
   let metric = METRICS[0];
   function drawLast() {
     const rows = P.filter((r) => LAST[r.short] && r.gp >= minGP && metric.cur(r) != null).sort((a, c) => metric.cur(c) - metric.cur(a) || a.name.localeCompare(c.name));
     const pv = (r) => metric.prev(LAST[r.short]);
-    const band = metric.noise / Math.sqrt(G);
+    const band = metric.noise / Math.sqrt(metric.fam ? gN(metric.fam) : G);
     dumbbell($('#ch-last'), rows, {
       label: (r) => r.short, cur: metric.cur, prev: pv, dfmt: metric.dfmt, band,
       tip: (r) => [r.name, `This season ${f2(metric.cur(r))} over ${count(r.gp, 'game')}`, `Last season ${f2(pv(r))} over ${LAST[r.short].gp} games`],
@@ -664,6 +681,7 @@
     const parts = [];
     if (up.length) parts.push(`Biggest gains: ${list(up.map((r) => esc(r.short) + ' (' + metric.dfmt(d(r)) + ')'))}.`);
     if (down.length) parts.push(`Biggest drops: ${list(down.map((r) => esc(r.short) + ' (' + metric.dfmt(d(r)) + ')'))}.`);
+    if (metric.fam && part(metric.fam)) parts.push(`This season's ${metric.label.toLowerCase()} is from ${gamesTxt(cov(metric.fam))} only, because the later export leaves it out.`);
     parts.push(`Changes smaller than ${metric.dfmt(band).replace('+', '')} are drawn grey.`);
     parts.push(G < 5 ? `After ${count(G, 'game')} even the colored gaps are mostly noise. Last season is a full year and this season is a few nights.` : 'Gaps this size can still be a hot or cold stretch.');
     $('#th-last-sum').innerHTML = parts.join(' ');
@@ -678,9 +696,11 @@
   function drawSeason() {
     drawLast();
     const log = S.log;
-    if (!gate('#ch-g-goals', 3, 'Until then, the game log below has every number.')) gcols($('#ch-g-goals'), log, { series: [{ name: 'Goals', f: 'g', color: C.g }, { name: 'Expected goals', f: 'xg', color: C.s2, fmt: f1 }], tip: (r) => [`Game ${r.game}`, `${r.g} goals, ${f2(r.xg)} expected`] });
-    if (!gate('#ch-g-shots', 3, 'Until then, the game log below has every number.')) gcols($('#ch-g-shots'), log, { series: [{ name: 'Attempts', f: 'shots', color: C.s2 }, { name: 'On goal', f: 'sog', color: C.g }], tip: (r) => [`Game ${r.game}`, `${r.shots} attempts, ${r.sog} on goal`] });
-    const cols = [['Game', (r) => r.game], ['Date', (r) => fmtDate(r.date)], ['Goals', (r) => r.g], ['xG', (r) => f2(r.xg)], ['Shots', (r) => r.shots], ['On goal', (r) => r.sog],
+    const span = (r) => r.game - (r.first || r.game) + 1, per = (v, r) => (v == null ? null : +(v / span(r)).toFixed(1));
+    const avg = log.map((r) => ({ ...r, g: per(r.g, r), xg: per(r.xg, r), shots: per(r.shots, r), sog: per(r.sog, r) }));
+    if (!gate('#ch-g-goals', 3, 'Until then, the game log below has every number.')) gcols($('#ch-g-goals'), avg, { series: [{ name: 'Goals', f: 'g', color: C.g }, { name: 'Expected goals', f: 'xg', color: C.s2, fmt: f1 }], tip: (r) => [r.first !== r.game ? `Games ${r.first} to ${r.game}, per game` : `Game ${r.game}`, `${r.g} goals, ${r.xg == null ? 'no expected goals in the export' : f2(r.xg) + ' expected'}`] });
+    if (!gate('#ch-g-shots', 3, 'Until then, the game log below has every number.')) gcols($('#ch-g-shots'), avg, { series: [{ name: 'Attempts', f: 'shots', color: C.s2 }, { name: 'On goal', f: 'sog', color: C.g }], tip: (r) => [r.first !== r.game ? `Games ${r.first} to ${r.game}, per game` : `Game ${r.game}`, `${r.shots} attempts, ${r.sog} on goal`] });
+    const cols = [['Game', (r) => (span(r) > 1 ? `${r.first}–${r.game}` : r.game)], ['Date', (r) => fmtDate(r.date)], ['Goals', (r) => r.g], ['xG', (r) => (r.xg == null ? '–' : f2(r.xg))], ['Shots', (r) => r.shots], ['On goal', (r) => r.sog],
       ['FO %', (r) => (r.fo ? pctOf(r.fow, r.fo) + '%' : '–')], ['PIM', (r) => r.pim], ['Drawn', (r) => r.drawn], ['Skaters', (r) => r.skaters]];
     const t = $('#th-glog');
     t.tHead.innerHTML = '<tr>' + cols.map(([l], i) => `<th scope="col" class="${i === 0 || i > 1 ? 'r' : ''}"><span>${l}</span></th>`).join('') + '</tr>';
@@ -703,9 +723,10 @@
     if (Math.max(r.fo, hf ? hf.fo : 0) >= 5) tags.push('Takes faceoffs');
     if (!lp) tags.push('New to the data');
     const s = [];
-    const shotLine = r.shots ? `${count(r.shots, 'shot')} (${r.sog} on goal) for ${count(r.g, 'goal')} on ${f1(r.xg)} expected.` : `no shots, and ${f1(r.xg)} expected goals.`;
+    const xgBit = r.xg == null ? '' : part('xg') ? ` (${f1(r.xg)} expected goals${inTxt('xg')})` : ` on ${f1(r.xg)} expected`;
+    const shotLine = r.shots ? `${count(r.shots, 'shot')} (${r.sog} on goal) for ${count(r.g, 'goal')}${xgBit}.` : `no shots${xgBit}.`;
     s.push(iceOK() ? `${b(r.toi_txt)} ${G > 1 ? 'a game' : 'of ice time'}, ${shotLine}` : shotLine.replace(/^./, (c) => c.toUpperCase()));
-    if (r.corsi != null) s.push(`The team took ${b(Math.round(r.corsi) + '%')} of shot attempts with him on the ice and made ${signed(r.netxg_pg, f2)} expected goals a game.`);
+    if (r.corsi != null) s.push(`${part('corsi') ? `In ${gamesTxt(cov('corsi'))}, t` : 'T'}he team took ${b(Math.round(r.corsi) + '%')} of shot attempts with him on the ice` + (r.netxg_pg != null ? ` and made ${signed(r.netxg_pg, f2)} expected goals a game.` : '.'));
     if (hf && handFull()) s.push(`By hand count, took ${count(hf.fo, 'faceoff')} and won ${b(pctOf(hf.fow, hf.fo) + '%')}` + (r.fo ? ` (the data export has ${r.fow} of ${r.fo}).` : ' (the data export has none).'));
     else if (r.fo) s.push(`Took ${count(r.fo, 'faceoff')} and won ${b(r.fopct + '%')} in the data export.`);
     if (r.pim || r.drawn) s.push([r.pim ? `Took ${r.pim} penalty ${r.pim === 1 ? 'minute' : 'minutes'}` : '', r.drawn ? `drew ${count(r.drawn, 'penalty').replace('penaltys', 'penalties')}` : ''].filter(Boolean).join(' and ').replace(/^./, (c) => c.toUpperCase()) + '.');
@@ -837,8 +858,9 @@
 
   /* ---------- draw and load ---------- */
   function fillVars() {
-    const v = { minGames: count(minGP, 'game'), games: G, updated: S.updated ? fmtDate(S.updated) : '', passBase: PB };
+    const v = { minCorsi: count(minFor('corsi'), 'game'), minGames: count(minGP, 'game'), games: G, updated: S.updated ? fmtDate(S.updated) : '', passBase: PB };
     $$('[data-var]').forEach((el) => { el.textContent = v[el.dataset.var]; });
+    $$('[data-fam]').forEach((el) => { el.hidden = !part(el.dataset.fam); if (part(el.dataset.fam)) el.textContent = famNote(el.dataset.fam); });
   }
   function draw() {
     if (!P.length) return;
@@ -866,7 +888,8 @@
         fail(`Couldn't load ${list(missing.map((n) => `data/${n}.json`))}. If you're offline, reconnect and try again. If this keeps happening, rerun prep/prep.py and push again.`);
         return;
       }
-      P = got.players; S = got.season; LAST = got['last-season'] || {};
+      P = got.players; S = got.season;
+      LAST = Object.fromEntries(Object.entries(got['last-season'] || {}).map(([k, l]) => [(P.find((r) => r.name === l.name) || { short: k }).short, l]));
       P.forEach((r) => {
         if (!r.fo) r.fopct = null;
         ['dz', 'nz', 'oz'].forEach((z) => { r['fz_' + z] = r['fo_' + z] ? Math.round((r['fow_' + z] / r['fo_' + z]) * 100) : null; });
@@ -874,7 +897,7 @@
       G = S.games; minGP = Math.max(1, Math.ceil(G / 2));
       tracked = d3.sum(P, (r) => r.toi * r.gp) / (5 * G);
       buildHand(got['faceoffs-hand']);
-      PB = Math.round(d3.median(P.filter((r) => r.gp >= minGP && r.corsi != null), (r) => r.accpass));
+      PB = Math.round(d3.median(P.filter((r) => r.corsi != null && r.gp_corsi >= minFor('corsi')), (r) => r.accpass));
       $('#th-status').textContent = `Through game ${G} · updated ${fmtDate(S.updated)}`;
       route();
     });

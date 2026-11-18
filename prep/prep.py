@@ -1,8 +1,11 @@
-"""Turn the cumulative skater exports in exports/ into the JSON files the site reads.
+"""Turn the skater exports in exports/ into the JSON files the site reads.
 
 Usage: python3 prep/prep.py
-Each export holds per-game averages for the whole season so far, so season totals are
-average x games played, and one game is the difference between two consecutive exports.
+An export holds per-game averages, so totals are average x games played. Most exports cover
+the season so far, and one game is the difference between two consecutive exports. An export
+that covers only some games says so in its file name, like ..._18-Nov-2026_games-2-3.xlsx.
+Some exports leave out columns (xG, shot attempts, passing...). Those stats are then summed
+only over the games that have them, and season.json lists which games each one covers.
 """
 import glob, json, math, os, re, datetime
 import openpyxl
@@ -22,6 +25,15 @@ COUNTS = {
 }
 MINUTES = {'toi_t': 'Time on ice', 'pim': 'Penalty time', 'pp_min': 'Power play time', 'pk_min': 'Short-handed time'}
 EXPECTED = {'xg': 'xG (Expected goals)', 'xgf': 'Team xG when on ice', 'xga': "Opponent's xG when on ice"}
+# stats that some exports leave out: family -> (fields, the column that shows the family is there)
+FAMILIES = {
+    'xg': (['xg', 'xgf', 'xga'], 'xG (Expected goals)'),
+    'corsi': (['cf', 'ca'], 'CORSI+'),
+    'entries': (['entries', 'breakouts'], 'Entries'),
+    'pp': (['pp_min', 'pk_min'], 'Power play time'),
+    'ga_on': (['ga_on'], "Opponent's goals when on ice"),
+    'pass': ([], 'Accurate passes, %'),
+}
 
 
 def num(v):
@@ -67,57 +79,114 @@ def totals(d):
     return t
 
 
-# ---- read every export, keep the latest file for each game number
-snaps = {}
+# ---- read every export. Season-to-date files keep the latest per game count; range files are kept as they are.
+snaps, ranges = {}, []
 for path in glob.glob(os.path.join(EXPORTS, '*.xlsx')):
-    m = re.search(r'(\d{2}-[A-Za-z]{3}-\d{4})', os.path.basename(path))
+    base = os.path.basename(path)
+    m = re.search(r'(\d{2}-[A-Za-z]{3}-\d{4})', base)
     date = datetime.datetime.strptime(m.group(1), '%d-%b-%Y').date() if m else datetime.date.fromtimestamp(os.path.getmtime(path))
     rows = read_export(path)
+    has = {f for f, (_, col) in FAMILIES.items() if col in rows[0]}
+    rg = re.search(r'games?-(\d+)(?:-(\d+))?', base)
+    if rg:
+        a, b = int(rg.group(1)), int(rg.group(2) or rg.group(1))
+        n = max(rnd(num(r['Games played'])) for r in rows)
+        if n != b - a + 1:
+            raise SystemExit(f'{base}: the name says games {a}-{b}, but the most games played in it is {n}.')
+        ranges.append({'first': a, 'last': b, 'date': date, 'file': base, 'rows': rows, 'has': has})
+        continue
     game = max(rnd(num(r['Games played'])) for r in rows)
     if game not in snaps or date >= snaps[game]['date']:
-        snaps[game] = {'date': date, 'file': os.path.basename(path), 'rows': rows}
-if not snaps:
+        snaps[game] = {'date': date, 'file': base, 'rows': rows, 'has': has}
+if not snaps and not ranges:
     raise SystemExit('No .xlsx files found in exports/')
 
 # short names: surname, or first initial plus surname if two players share one
-fulls = sorted({r['Player'] for s in snaps.values() for r in s['rows']})
+fulls = sorted({r['Player'] for s in list(snaps.values()) + ranges for r in s['rows']})
 sur = [n.split()[-1] for n in fulls]
 short = {n: (n.split()[-1] if sur.count(n.split()[-1]) == 1 else f'{n[0]}. {n.split()[-1]}') for n in fulls}
 
-# ---- per-game lines from the difference between consecutive exports
-LOG_KEYS = ['toi_t', 'g', 'a', 'p', 'pm', 'shots', 'sog', 'xg', 'pim', 'drawn', 'fo', 'fow', 'hits', 'blk', 'ga_on']
-prev, per_game, team_log, latest = {}, {}, [], {}
+# ---- pieces: blocks of games with each player's totals in them
+FIELDS = ['gp'] + list(COUNTS) + list(MINUTES) + list(EXPECTED)
+pieces, prev, prev_n = [], {}, 0
 for game in sorted(snaps):
     s = snaps[game]
-    lines = {}
+    tot = {}
     for r in s['rows']:
         sh, t = short[r['Player']], totals(r)
         before = prev.get(sh)
         if t['gp'] > (before['gp'] if before else 0):
-            line = {k: round(t[k] - (before[k] if before else 0), 2) for k in LOG_KEYS}
-            for k in LOG_KEYS:
-                if k not in ('pm', 'toi_t', 'xg') and line[k] < 0:
-                    line[k] = 0
-            line['game'] = game
-            lines[sh] = line
-            per_game.setdefault(sh, []).append(line)
+            d = {k: round(t[k] - (before[k] if before else 0), 2) for k in FIELDS}
+            for k in COUNTS:
+                if k not in ('pm',) and d[k] < 0:
+                    d[k] = 0
+            d['pass'] = num(r.get('Accurate passes, %')) if 'pass' in s['has'] else None
+            tot[sh] = d
         prev[sh] = t
-        latest[sh] = {'row': r, 'tot': t}
+    has = s['has'] & (snaps[prev_n]['has'] if prev_n else s['has'])
+    pieces.append({'first': prev_n + 1, 'last': game, 'date': s['date'], 'tot': tot, 'has': has, 'cum': True, 'rows': s['rows']})
+    prev_n = game
+for rg in ranges:
+    tot = {}
+    for r in rg['rows']:
+        t = totals(r)
+        if t['gp']:
+            t['pass'] = num(r.get('Accurate passes, %')) if 'pass' in rg['has'] else None
+            tot[short[r['Player']]] = t
+    pieces.append({'first': rg['first'], 'last': rg['last'], 'date': rg['date'], 'tot': tot, 'has': rg['has'], 'cum': False, 'rows': rg['rows']})
+pieces.sort(key=lambda p: p['first'])
+nxt = 1
+for p in pieces:
+    if p['first'] != nxt:
+        raise SystemExit(f'Exports do not line up: expected one starting at game {nxt}, found games {p["first"]}-{p["last"]}. '
+                         'Check the games-N-M part of the range file names.')
+    nxt = p['last'] + 1
+
+# ---- team log: one line per piece (a range file is one line covering several games)
+team_log = []
+for p in pieces:
+    lines = p['tot']
     sm = lambda k: round(sum(l[k] for l in lines.values()), 2)
     team_log.append({
-        'game': game, 'date': s['date'].isoformat(), 'skaters': len(lines),
-        'g': sm('g'), 'xg': sm('xg'), 'shots': sm('shots'), 'sog': sm('sog'), 'fo': sm('fo'), 'fow': sm('fow'),
-        'pim': sm('pim'), 'drawn': sm('drawn'),
+        'game': p['last'], 'first': p['first'], 'date': p['date'].isoformat(), 'skaters': len(lines),
+        'g': sm('g'), 'xg': sm('xg') if 'xg' in p['has'] else None, 'shots': sm('shots'), 'sog': sm('sog'), 'fo': sm('fo'), 'fow': sm('fow'),
+        'pim': sm('pim'), 'drawn': sm('drawn'), 'toi': round(sm('toi_t') / (5 * (p['last'] - p['first'] + 1)), 1),
         # no skater can have been on the ice for fewer goals against than the team allowed, so this is a lower bound
-        'ga_min': max([l['ga_on'] for l in lines.values()] or [0]),
+        'ga_min': max([l['ga_on'] for l in lines.values()] or [0]) if 'ga_on' in p['has'] else None,
     })
+cover = {f: [g for p in pieces if f in p['has'] for g in range(p['first'], p['last'] + 1)] for f in FAMILIES}
 
-# ---- one record per player: latest totals plus rates
+# ---- each player's season: counts over every piece, family stats only over the pieces that have them
+latest, per_game = {}, {}
+for p in pieces:
+    for r in p['rows']:
+        if short[r['Player']] in p['tot']:
+            latest[short[r['Player']]] = {'row': r}
+    for sh, d in p['tot'].items():
+        per_game.setdefault(sh, []).append(dict(d, game=p['last'], first=p['first']))
+for sh, v in latest.items():
+    ps = [(p, p['tot'][sh]) for p in pieces if sh in p['tot']]
+    t = {k: round(sum(d[k] for _, d in ps), 2) for k in FIELDS}
+    for k in list(COUNTS) + ['gp']:
+        t[k] = rnd(t[k])
+    for f in FAMILIES:
+        inn = [d for p, d in ps if f in p['has']]
+        t['gp_' + f] = rnd(sum(d['gp'] for d in inn))
+        for k in ('g', 'pm', 'toi_t'):
+            t[k + '_' + f] = round(sum(d[k] for d in inn), 2)
+    # shortcut: pass % is a games-weighted average of each piece's figure, exact only when every piece is one file's own games
+    pw = [(d['pass'], d['gp']) for p, d in ps if d.get('pass') is not None]
+    t['pass'] = sum(a * w for a, w in pw) / sum(w for _, w in pw) if pw and sum(w for _, w in pw) else None
+    v['tot'] = t
+
+# ---- one record per player: season totals plus rates
 players = []
 for sh, v in latest.items():
     r, t = v['row'], v['tot']
     gp = t['gp']
     toi = t['toi_t'] / gp if gp else 0
+    gx, gc, ge = t['gp_xg'], t['gp_corsi'], t['gp_entries']
+    xgnet = t['xgf'] - t['xga']
     p = dict(
         name=r['Player'], short=sh, num=int(num(r['Shirt number'])), pos=r['Position'], gp=gp,
         toi=round(toi, 2), toi_txt=mmss(toi), shifts_pg=round(t['shifts'] / gp, 1),
@@ -126,19 +195,21 @@ for sh, v in latest.items():
         shots=t['shots'], sog=t['sog'], blk=t['blk'], hits=t['hits'],
         shpct=round(t['g'] / t['shots'] * 100, 1) if t['shots'] else 0,
         sogpct=round(t['sog'] / t['shots'] * 100) if t['shots'] else 0,
-        xg=t['xg'], gxg=round(t['g'] - t['xg'], 2),
-        xgf=t['xgf'], xga=t['xga'], netxg=round(t['xgf'] - t['xga'], 2), netxg_pg=round((t['xgf'] - t['xga']) / gp, 2),
-        pmgap=round(t['pm'] - (t['xgf'] - t['xga']), 2),
-        netxg60=round((t['xgf'] - t['xga']) / t['toi_t'] * 60, 2) if t['toi_t'] else 0,
-        corsi=round(t['cf'] / (t['cf'] + t['ca']) * 100, 2) if t['cf'] + t['ca'] else None,
-        sc=t['sc'], ga_on=t['ga_on'],
-        entries=round(t['entries'] / gp, 1), breakouts=round(t['breakouts'] / gp, 1), slot=round(t['slot'] / gp, 2),
+        # xG stats only over the games that have xG, against the goals and plus-minus from those same games
+        gp_xg=gx, xg=t['xg'] if gx else None, g_xg=rnd(t['g_xg']), gxg=round(t['g_xg'] - t['xg'], 2) if gx else None,
+        xgf=t['xgf'] if gx else None, xga=t['xga'] if gx else None, netxg=round(xgnet, 2) if gx else None,
+        netxg_pg=round(xgnet / gx, 2) if gx else None, pmgap=round(t['pm_xg'] - xgnet, 2) if gx else None,
+        netxg60=round(xgnet / t['toi_t_xg'] * 60, 2) if gx and t['toi_t_xg'] else None,
+        gp_corsi=gc, corsi=round(t['cf'] / (t['cf'] + t['ca']) * 100, 2) if t['cf'] + t['ca'] else None,
+        sc=t['sc'], ga_on=t['ga_on'] if t['gp_ga_on'] else None,
+        gp_entries=ge, entries=round(t['entries'] / ge, 1) if ge else None, breakouts=round(t['breakouts'] / ge, 1) if ge else None,
+        slot=round(t['slot'] / gp, 2),
         shots_pg=round(t['shots'] / gp, 1), hits_pg=round(t['hits'] / gp, 2), blk_pg=round(t['blk'] / gp, 2),
         fo=t['fo'], fow=t['fow'], fopct=round(t['fow'] / t['fo'] * 100) if t['fo'] else 0,
         fo_dz=t['fo_dz'], fow_dz=t['fow_dz'], fo_nz=t['fo_nz'], fow_nz=t['fow_nz'], fo_oz=t['fo_oz'], fow_oz=t['fow_oz'],
         pim=rnd(t['pim']), drawn=t['drawn'], pp_min=rnd(t['pp_min']), pk_min=rnd(t['pk_min']),
-        accpass=rnd(num(r.get('Accurate passes, %'))),
-        log=[{'game': l['game'], 'toi': round(l['toi_t'], 2), 'g': l['g'], 'a': l['a'], 'p': l['p'], 'shots': l['shots'], 'sog': l['sog'], 'xg': l['xg']}
+        gp_pass=t['gp_pass'], accpass=rnd(t['pass']) if t['pass'] is not None else None,
+        log=[{'game': l['game'], 'first': l['first'], 'toi': round(l['toi_t'], 2), 'g': l['g'], 'a': l['a'], 'p': l['p'], 'shots': l['shots'], 'sog': l['sog']}
              for l in per_game.get(sh, [])],
     )
     players.append(p)
@@ -146,5 +217,8 @@ players.sort(key=lambda p: (-p['p'], -p['g'], p['name']))
 
 os.makedirs(OUT, exist_ok=True)
 json.dump(players, open(os.path.join(OUT, 'players.json'), 'w'))
-json.dump({'games': team_log[-1]['game'], 'updated': team_log[-1]['date'], 'log': team_log}, open(os.path.join(OUT, 'season.json'), 'w'))
+json.dump({'games': team_log[-1]['game'], 'updated': team_log[-1]['date'], 'log': team_log, 'cover': cover}, open(os.path.join(OUT, 'season.json'), 'w'))
 print(f'{len(players)} players, {len(team_log)} export(s), through game {team_log[-1]["game"]}')
+short_of = {f: c for f, c in cover.items() if len(c) < team_log[-1]['game']}
+if short_of:
+    print('Only some games have: ' + ', '.join(f'{f} (games {", ".join(map(str, c)) or "none"})' for f, c in short_of.items()))
