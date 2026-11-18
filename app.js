@@ -597,8 +597,10 @@
       const pen = P.filter((r) => r.pim > 0 || r.drawn > 0).sort((a, c) => c.pim - a.pim || c.drawn - a.drawn || a.name.localeCompare(c.name));
       if (!pen.length) { message($('#ch-pim'), 'No penalties yet.'); $('#ch-drawn').replaceChildren(); }
       else {
-        hbar($('#ch-pim'), pen, { label: (r) => r.short, value: (r) => r.pim, color: () => C.bad, rowH: 24, vlabel: (r) => r.pim + ' min', tick: f0, tip: (r) => [r.name, `${r.pim} penalty minutes taken`, `${count(r.drawn, 'penalty').replace('penaltys', 'penalties')} drawn`] });
-        hbar($('#ch-drawn'), pen, { label: (r) => r.short, value: (r) => r.drawn, color: () => C.g, rowH: 24, vlabel: (r) => String(r.drawn), tick: f0, tip: (r) => [r.name, `${count(r.drawn, 'penalty').replace('penaltys', 'penalties')} drawn`, `${r.pim} penalty minutes taken`] });
+        /* shortcut: the export counts penalties drawn but not their length, so each counts as a 2-minute minor; use real minutes if an export ever has them */
+        const penDom = [0, d3.max(pen, (r) => Math.max(r.pim, r.drawn * 2))];
+        hbar($('#ch-pim'), pen, { label: (r) => r.short, value: (r) => r.pim, color: () => C.bad, rowH: 24, vlabel: (r) => r.pim + ' min', tick: f0, domain: penDom, tip: (r) => [r.name, `${r.pim} penalty minutes taken`, `${count(r.drawn, 'penalty').replace('penaltys', 'penalties')} drawn`] });
+        hbar($('#ch-drawn'), pen, { label: (r) => r.short, value: (r) => r.drawn * 2, color: () => C.g, rowH: 24, vlabel: (r) => r.drawn * 2 + ' min', tick: f0, domain: penDom, tip: (r) => [r.name, `${count(r.drawn, 'penalty').replace('penaltys', 'penalties')} drawn`, `${r.pim} penalty minutes taken`] });
       }
       [['pp', 'pp_min'], ['pk', 'pk_min']].forEach(([id, f]) => {
         const card = $('#ch-' + id).closest('.th-card');
