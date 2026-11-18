@@ -1,0 +1,8 @@
+{
+  "about": "Opponents and final scores, typed in by hand because the exports have neither. prep.py does not touch this file.",
+  "games": {
+    "1": { "opponent": "Western New England", "date": "2026-10-31", "for": 7, "against": 0 },
+    "2": { "opponent": "Hobart", "date": "2026-11-13", "for": 1, "against": 4 },
+    "3": { "opponent": "Oswego St.", "date": "2026-11-14", "for": 1, "against": 4 }
+  }
+}

@@ -17,7 +17,7 @@
 
   let P = [], S = { games: 1, updated: '', log: [] }, LAST = {}, G = 1, minGP = 1, tracked = 60, PB = 0;
   /* faceoffs come from two places: the data export (P) and a hand count at the rink (HP, from data/faceoffs-hand.json) */
-  let HP = [], HG = [], foSrc = 'export';
+  let HP = [], HG = [], foSrc = 'export', RES = {};
   const f0 = d3.format('d'), f1 = d3.format('.1f'), f2 = d3.format('.2f');
   const signed = (v, f) => (v > 0 ? '+' : v < 0 ? '−' : '') + (f || f1)(Math.abs(v));
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -435,7 +435,7 @@
     if (takers.length) {
       const fo = foSum(src, 'fo'), fow = foSum(src, 'fow');
       const z = (k) => { const n = foSum(src, 'fo_' + k), w = foSum(src, 'fow_' + k); return n ? `${w} of ${n} (${pctOf(w, n)}%)` : 'no draws'; };
-      const other = src === 'hand' && sum('fo') ? ` The data export has only ${b(sum('fow'))} of ${b(sum('fo'))}, so its faceoff numbers miss part of the game.` : '';
+      const other = src === 'hand' && sum('fo') ? ` The data export has ${b(sum('fow'))} of ${b(sum('fo'))}. The Team tab compares the two.` : '';
       const gone = Object.values(LAST).filter((l) => l.left), allFo = d3.sum(Object.values(LAST), (l) => l.fo);
       const share = allFo ? pctOf(d3.sum(gone, (l) => l.fo), allFo) : 0;
       out.push({
@@ -700,13 +700,16 @@
     const avg = log.map((r) => ({ ...r, g: per(r.g, r), xg: per(r.xg, r), shots: per(r.shots, r), sog: per(r.sog, r) }));
     if (!gate('#ch-g-goals', 3, 'Until then, the game log below has every number.')) gcols($('#ch-g-goals'), avg, { series: [{ name: 'Goals', f: 'g', color: C.g }, { name: 'Expected goals', f: 'xg', color: C.s2, fmt: f1 }], tip: (r) => [r.first !== r.game ? `Games ${r.first} to ${r.game}, per game` : `Game ${r.game}`, `${r.g} goals, ${r.xg == null ? 'no expected goals in the export' : f2(r.xg) + ' expected'}`] });
     if (!gate('#ch-g-shots', 3, 'Until then, the game log below has every number.')) gcols($('#ch-g-shots'), avg, { series: [{ name: 'Attempts', f: 'shots', color: C.s2 }, { name: 'On goal', f: 'sog', color: C.g }], tip: (r) => [r.first !== r.game ? `Games ${r.first} to ${r.game}, per game` : `Game ${r.game}`, `${r.shots} attempts, ${r.sog} on goal`] });
-    const cols = [['Game', (r) => (span(r) > 1 ? `${r.first}–${r.game}` : r.game)], ['Date', (r) => fmtDate(r.date)], ['Goals', (r) => r.g], ['xG', (r) => (r.xg == null ? '–' : f2(r.xg))], ['Shots', (r) => r.shots], ['On goal', (r) => r.sog],
+    /* opponents and scores come from data/results.json, typed in by hand; a multi-game row lists each game */
+    const result = (r) => d3.range(r.first || r.game, r.game + 1).map((g) => RES[g]).filter(Boolean)
+      .map((x) => `${x.for > x.against ? 'W' : x.for < x.against ? 'L' : 'T'} ${x.for}–${x.against} vs ${x.opponent}`).join(', ') || '–';
+    const cols = [['Game', (r) => (span(r) > 1 ? `${r.first}–${r.game}` : r.game)], ['Date', (r) => { const ds = d3.range(r.first || r.game, r.game + 1).map((g) => RES[g] && RES[g].date); return ds.every(Boolean) ? ds.map((d) => d3.timeFormat('%b %-d')(new Date(d + 'T12:00:00'))).join(', ') : fmtDate(r.date); }], ['Result', result], ['Goals', (r) => r.g], ['xG', (r) => (r.xg == null ? '–' : f2(r.xg))], ['Shots', (r) => r.shots], ['On goal', (r) => r.sog],
       ['FO %', (r) => (r.fo ? pctOf(r.fow, r.fo) + '%' : '–')], ['PIM', (r) => r.pim], ['Drawn', (r) => r.drawn], ['Skaters', (r) => r.skaters]];
     const t = $('#th-glog');
-    t.tHead.innerHTML = '<tr>' + cols.map(([l], i) => `<th scope="col" class="${i === 0 || i > 1 ? 'r' : ''}"><span>${l}</span></th>`).join('') + '</tr>';
+    t.tHead.innerHTML = '<tr>' + cols.map(([l], i) => `<th scope="col" class="${i === 0 || i > 2 ? 'r' : ''}"><span>${l}</span></th>`).join('') + '</tr>';
     t.tBodies[0].replaceChildren(...log.slice().reverse().map((r) => {
       const tr = document.createElement('tr');
-      cols.forEach(([, f], i) => { const td = document.createElement('td'); td.textContent = f(r); if (i === 0 || i > 1) td.className = 'n'; tr.appendChild(td); });
+      cols.forEach(([, f], i) => { const td = document.createElement('td'); td.textContent = f(r); if (i === 0 || i > 2) td.className = 'n'; tr.appendChild(td); });
       return tr;
     }));
   }
@@ -879,7 +882,7 @@
     if (current === 'data') renderTable();
   }
 
-  const FILES = ['players', 'season', 'last-season', 'faceoffs-hand'];
+  const FILES = ['players', 'season', 'last-season', 'faceoffs-hand', 'results'];
   Promise.all(FILES.map((n) => fetch(`data/${n}.json`).then((r) => (r.ok ? r.json() : Promise.reject(new Error(r.status)))).then((d) => [n, d], () => [n, null])))
     .then((res) => {
       const got = Object.fromEntries(res);
@@ -897,6 +900,7 @@
       G = S.games; minGP = Math.max(1, Math.ceil(G / 2));
       tracked = d3.sum(P, (r) => r.toi * r.gp) / (5 * G);
       buildHand(got['faceoffs-hand']);
+      RES = (got.results && got.results.games) || {};
       PB = Math.round(d3.median(P.filter((r) => r.corsi != null && r.gp_corsi >= minFor('corsi')), (r) => r.accpass));
       $('#th-status').textContent = `Through game ${G} · updated ${fmtDate(S.updated)}`;
       route();

@@ -1,5 +1,5 @@
 {
-  "about": "Faceoffs counted by hand at the rink, entered by hand. prep.py does not touch this file. Each zone is [won, lost]. Names match the short names in players.json.",
+  "about": "Faceoffs counted by hand at the rink, entered by hand. prep.py does not touch this file. Each zone is [won, lost]. Names match the short names in players.json. Games 2 (Hobart, Nov 13) and 3 (Oswego, Nov 14) come from the faceoff tracker CSV exports.",
   "games": {
     "1": {
       "Fogu": { "dz": [7, 3], "nz": [3, 2], "oz": [6, 0] },
@@ -10,6 +10,23 @@
       "Rice": { "nz": [1, 0] },
       "Mackenzie": { "oz": [0, 1] },
       "Floccare": { "nz": [0, 1] }
+    },
+    "2": {
+      "Jenkins": { "dz": [3, 1], "nz": [2, 1], "oz": [13, 8] },
+      "Fogu": { "dz": [4, 5], "nz": [4, 5], "oz": [3, 3] },
+      "Chenevert": { "dz": [0, 6], "nz": [1, 1], "oz": [3, 1] },
+      "Urban": { "dz": [1, 2], "nz": [1, 2] },
+      "Baker": { "dz": [0, 1], "nz": [0, 1] },
+      "Rice": { "oz": [0, 1] },
+      "Gibbons": { "nz": [1, 0] }
+    },
+    "3": {
+      "Jenkins": { "dz": [0, 5], "nz": [3, 3], "oz": [8, 7] },
+      "Fogu": { "dz": [5, 3], "nz": [1, 2], "oz": [2, 2] },
+      "Urban": { "dz": [5, 3], "nz": [1, 0], "oz": [2, 0] },
+      "Gibbons": { "dz": [1, 2], "nz": [1, 0] },
+      "Chenevert": { "dz": [0, 1], "oz": [0, 1] },
+      "Tang": { "oz": [0, 1] }
     }
   }
 }
