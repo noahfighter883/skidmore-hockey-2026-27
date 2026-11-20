@@ -6,6 +6,9 @@ the season so far, and one game is the difference between two consecutive export
 that covers only some games says so in its file name, like ..._18-Nov-2026_games-2-3.xlsx.
 Some exports leave out columns (xG, shot attempts, passing...). Those stats are then summed
 only over the games that have them, and season.json lists which games each one covers.
+A season-to-date file that overlaps a range file keeps the range's games split out; any stat the
+range file left out then comes from the season-to-date file for those games too. Retired exports
+go in exports/superseded/, which this script ignores.
 """
 import glob, json, math, os, re, datetime
 import openpyxl
@@ -108,24 +111,7 @@ short = {n: (n.split()[-1] if sur.count(n.split()[-1]) == 1 else f'{n[0]}. {n.sp
 
 # ---- pieces: blocks of games with each player's totals in them
 FIELDS = ['gp'] + list(COUNTS) + list(MINUTES) + list(EXPECTED)
-pieces, prev, prev_n = [], {}, 0
-for game in sorted(snaps):
-    s = snaps[game]
-    tot = {}
-    for r in s['rows']:
-        sh, t = short[r['Player']], totals(r)
-        before = prev.get(sh)
-        if t['gp'] > (before['gp'] if before else 0):
-            d = {k: round(t[k] - (before[k] if before else 0), 2) for k in FIELDS}
-            for k in COUNTS:
-                if k not in ('pm',) and d[k] < 0:
-                    d[k] = 0
-            d['pass'] = num(r.get('Accurate passes, %')) if 'pass' in s['has'] else None
-            tot[sh] = d
-        prev[sh] = t
-    has = s['has'] & (snaps[prev_n]['has'] if prev_n else s['has'])
-    pieces.append({'first': prev_n + 1, 'last': game, 'date': s['date'], 'tot': tot, 'has': has, 'cum': True, 'rows': s['rows']})
-    prev_n = game
+pieces, range_pieces = [], []
 for rg in ranges:
     tot = {}
     for r in rg['rows']:
@@ -133,7 +119,40 @@ for rg in ranges:
         if t['gp']:
             t['pass'] = num(r.get('Accurate passes, %')) if 'pass' in rg['has'] else None
             tot[short[r['Player']]] = t
-    pieces.append({'first': rg['first'], 'last': rg['last'], 'date': rg['date'], 'tot': tot, 'has': rg['has'], 'cum': False, 'rows': rg['rows']})
+    range_pieces.append({'first': rg['first'], 'last': rg['last'], 'date': rg['date'], 'tot': tot, 'has': rg['has'], 'cum': False, 'rows': rg['rows']})
+prev, prev_n = {}, 0
+for game in sorted(snaps):
+    s = snaps[game]
+    # range files between the previous season-to-date file and this one are their own pieces, so take them off this one
+    took = [q for q in range_pieces if q['first'] > prev_n and q['last'] <= game]
+    for q in took:
+        for sh, t in q['tot'].items():
+            before = prev.get(sh)
+            prev[sh] = {k: (before[k] if before else 0) + t[k] for k in FIELDS}
+    left = sorted(set(range(prev_n + 1, game + 1)) - {g for q in took for g in range(q['first'], q['last'] + 1)})
+    if not left or left[-1] - left[0] + 1 != len(left):
+        raise SystemExit(f'{s["file"]}: the range files inside it must leave one unbroken block of games, not {left or "none"}.')
+    # players in a range file that lacks a stat this file has: keep them even with no games here, to carry that stat
+    lacking = {sh for q in took if s['has'] - q['has'] for sh in q['tot']}
+    tot = {}
+    for r in s['rows']:
+        sh, t = short[r['Player']], totals(r)
+        before = prev.get(sh)
+        if t['gp'] > (before['gp'] if before else 0) or sh in lacking:
+            d = {k: round(t[k] - (before[k] if before else 0), 2) for k in FIELDS}
+            for k in COUNTS:
+                if k not in ('pm',) and d[k] < 0:
+                    d[k] = 0
+            d['pass'] = num(r.get('Accurate passes, %')) if 'pass' in s['has'] else None
+            tot[sh] = d
+        prev[sh] = t
+    has = s['has'] & (snaps[prev_n]['has'] if prev_n in snaps else s['has'])
+    # a family missing from a range taken off is still in this piece's numbers, which then cover the range's games too
+    absorb = {f: [q for q in took if f not in q['has']] for f in has}
+    pieces.append({'first': left[0], 'last': left[-1], 'date': s['date'], 'tot': tot, 'has': has, 'cum': True, 'rows': s['rows'],
+                   'absorb': {f: qs for f, qs in absorb.items() if qs}})
+    prev_n = game
+pieces += range_pieces
 pieces.sort(key=lambda p: p['first'])
 nxt = 1
 for p in pieces:
@@ -148,13 +167,14 @@ for p in pieces:
     lines = p['tot']
     sm = lambda k: round(sum(l[k] for l in lines.values()), 2)
     team_log.append({
-        'game': p['last'], 'first': p['first'], 'date': p['date'].isoformat(), 'skaters': len(lines),
-        'g': sm('g'), 'xg': sm('xg') if 'xg' in p['has'] else None, 'shots': sm('shots'), 'sog': sm('sog'), 'fo': sm('fo'), 'fow': sm('fow'),
+        'game': p['last'], 'first': p['first'], 'date': p['date'].isoformat(), 'skaters': sum(1 for l in lines.values() if l['gp']),
+        'g': sm('g'), 'xg': sm('xg') if 'xg' in p['has'] and 'xg' not in p.get('absorb', {}) else None, 'shots': sm('shots'), 'sog': sm('sog'), 'fo': sm('fo'), 'fow': sm('fow'),
         'pim': sm('pim'), 'drawn': sm('drawn'), 'toi': round(sm('toi_t') / (5 * (p['last'] - p['first'] + 1)), 1),
         # no skater can have been on the ice for fewer goals against than the team allowed, so this is a lower bound
-        'ga_min': max([l['ga_on'] for l in lines.values()] or [0]) if 'ga_on' in p['has'] else None,
+        'ga_min': max([l['ga_on'] for l in lines.values()] or [0]) if 'ga_on' in p['has'] and 'ga_on' not in p.get('absorb', {}) else None,
     })
-cover = {f: [g for p in pieces if f in p['has'] for g in range(p['first'], p['last'] + 1)] for f in FAMILIES}
+spans = lambda p, f: [p] + p.get('absorb', {}).get(f, []) if f in p['has'] else []
+cover = {f: sorted(g for p in pieces for q in spans(p, f) for g in range(q['first'], q['last'] + 1)) for f in FAMILIES}
 
 # ---- each player's season: counts over every piece, family stats only over the pieces that have them
 latest, per_game = {}, {}
@@ -170,12 +190,12 @@ for sh, v in latest.items():
     for k in list(COUNTS) + ['gp']:
         t[k] = rnd(t[k])
     for f in FAMILIES:
-        inn = [d for p, d in ps if f in p['has']]
+        inn = [q['tot'][sh] for p, _ in ps for q in spans(p, f) if sh in q['tot']]
         t['gp_' + f] = rnd(sum(d['gp'] for d in inn))
         for k in ('g', 'pm', 'toi_t'):
             t[k + '_' + f] = round(sum(d[k] for d in inn), 2)
     # shortcut: pass % is a games-weighted average of each piece's figure, exact only when every piece is one file's own games
-    pw = [(d['pass'], d['gp']) for p, d in ps if d.get('pass') is not None]
+    pw = [(d['pass'], sum(q['tot'][sh]['gp'] for q in spans(p, 'pass') if sh in q['tot'])) for p, d in ps if d.get('pass') is not None]
     t['pass'] = sum(a * w for a, w in pw) / sum(w for _, w in pw) if pw and sum(w for _, w in pw) else None
     v['tot'] = t
 
@@ -210,7 +230,7 @@ for sh, v in latest.items():
         pim=rnd(t['pim']), drawn=t['drawn'], pp_min=rnd(t['pp_min']), pk_min=rnd(t['pk_min']),
         gp_pass=t['gp_pass'], accpass=rnd(t['pass']) if t['pass'] is not None else None,
         log=[{'game': l['game'], 'first': l['first'], 'toi': round(l['toi_t'], 2), 'g': l['g'], 'a': l['a'], 'p': l['p'], 'shots': l['shots'], 'sog': l['sog']}
-             for l in per_game.get(sh, [])],
+             for l in per_game.get(sh, []) if l['gp']],
     )
     players.append(p)
 players.sort(key=lambda p: (-p['p'], -p['g'], p['name']))
