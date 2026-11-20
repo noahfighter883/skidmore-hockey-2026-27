@@ -699,8 +699,7 @@
     drawLast();
     const log = S.log;
     const span = (r) => r.game - (r.first || r.game) + 1, per = (v, r) => (v == null ? null : +(v / span(r)).toFixed(1));
-    const avg = log.map((r) => ({ ...r, g: per(r.g, r), xg: per(r.xg, r), shots: per(r.shots, r), sog: per(r.sog, r) }));
-    if (!gate('#ch-g-goals', 3, 'Until then, the game log below has every number.')) gcols($('#ch-g-goals'), avg, { series: [{ name: 'Goals', f: 'g', color: C.g }, { name: 'Expected goals', f: 'xg', color: C.s2, fmt: f1 }], tip: (r) => [r.first !== r.game ? `Games ${r.first} to ${r.game}, per game` : `Game ${r.game}`, `${r.g} goals, ${r.xg == null ? 'no expected goals in the export' : f2(r.xg) + ' expected'}`] });
+    const avg = log.map((r) => ({ ...r, shots: per(r.shots, r), sog: per(r.sog, r) }));
     if (!gate('#ch-g-shots', 3, 'Until then, the game log below has every number.')) gcols($('#ch-g-shots'), avg, { series: [{ name: 'Attempts', f: 'shots', color: C.s2 }, { name: 'On goal', f: 'sog', color: C.g }], tip: (r) => [r.first !== r.game ? `Games ${r.first} to ${r.game}, per game` : `Game ${r.game}`, `${r.shots} attempts, ${r.sog} on goal`] });
     /* opponents and scores come from data/results.json, typed in by hand; a multi-game row lists each game */
     const result = (r) => d3.range(r.first || r.game, r.game + 1).map((g) => RES[g]).filter(Boolean)
